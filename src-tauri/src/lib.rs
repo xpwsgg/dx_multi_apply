@@ -1,8 +1,11 @@
 mod date_mapping;
 mod request_template;
+mod submit_client;
 
 #[cfg(test)]
 mod request_template_tests;
+#[cfg(test)]
+mod submit_client_tests;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
