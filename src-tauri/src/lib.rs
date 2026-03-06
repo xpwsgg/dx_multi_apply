@@ -1,7 +1,10 @@
+mod batch_runner;
 mod date_mapping;
 mod request_template;
 mod submit_client;
 
+#[cfg(test)]
+mod batch_runner_tests;
 #[cfg(test)]
 mod request_template_tests;
 #[cfg(test)]
