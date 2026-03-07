@@ -1,0 +1,391 @@
+[
+  {
+    "componentName": "SerialNumberField",
+    "fieldId": "serialNumberField_lxn9o9dx",
+    "label": "单号信息",
+    "fieldData": {}
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9e0",
+    "label": "申请类型",
+    "fieldData": {
+      "value": "一般访客"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly2ugh3m",
+    "label": "申请人ID",
+    "fieldData": {
+      "value": "17849759601"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lydnpzas",
+    "label": "地区代码",
+    "fieldData": {
+      "value": "HA"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly3uw4as",
+    "label": "法人代码",
+    "fieldData": {
+      "value": "1040"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly3uw4ar",
+    "label": "园区代码",
+    "fieldData": {
+      "value": "HB"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m2lk8mr2",
+    "label": "供应商code",
+    "fieldData": {
+      "value": "VCN00507"
+    }
+  },
+  {
+    "componentName": "RadioField",
+    "fieldId": "radioField_m4g9sf7c",
+    "label": "是否外籍",
+    "fieldData": {
+      "value": "否",
+      "text": "否"
+    },
+    "options": [
+      {
+        "defaultChecked": true,
+        "syncLabelValue": true,
+        "__sid": "item_m4g9skpu",
+        "text": "否",
+        "__sid__": "serial_m4g9skpu",
+        "value": "否",
+        "sid": "serial_m4g9skpu"
+      }
+    ]
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_ly3o95xh",
+    "label": "到访园区",
+    "fieldData": {
+      "value": "淮安第二园区",
+      "text": "淮安第二园区"
+    },
+    "options": [
+      {
+        "value": "淮安第二园区",
+        "text": "淮安第二园区"
+      }
+    ]
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_ly3o95xf",
+    "label": "到访公司",
+    "fieldData": {
+      "value": "庆鼎精密电子(淮安)有限公司",
+      "text": "庆鼎精密电子(淮安)有限公司"
+    },
+    "options": [
+      {
+        "value": "庆鼎精密电子(淮安)有限公司",
+        "text": "庆鼎精密电子(淮安)有限公司"
+      }
+    ]
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9eb",
+    "label": "身份类型",
+    "fieldData": {
+      "value": "生产服务（厂商）",
+      "text": "生产服务（厂商）"
+    },
+    "options": [
+      {
+        "value": "生产服务（厂商）",
+        "text": "生产服务（厂商）"
+      }
+    ]
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9ed",
+    "label": "服务性质/到访事由",
+    "fieldData": {
+      "value": "设备维护",
+      "text": "设备维护"
+    },
+    "options": [
+      {
+        "value": "设备维护",
+        "text": "设备维护"
+      }
+    ]
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9ei",
+    "label": "到访区域",
+    "fieldData": {
+      "value": "生产区域外围（不进入制造现场）",
+      "text": "外围公共区域"
+    },
+    "options": [
+      {
+        "defaultChecked": false,
+        "syncLabelValue": false,
+        "__sid": "item_m56iixst",
+        "text": "外围公共区域",
+        "__sid__": "serial_m56iixsq",
+        "value": "生产区域外围（不进入制造现场）",
+        "sid": "serial_khe7yak5"
+      }
+    ]
+  },
+  {
+    "componentName": "TextareaField",
+    "fieldId": "textareaField_lxn9o9eg",
+    "label": "服务/事由描述",
+    "fieldData": {
+      "value": "镭射机维护保养"
+    }
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9em",
+    "label": "所属公司",
+    "fieldData": {
+      "value": "VCN00507(镭富电子设备(上海)有限公司)"
+    },
+    "options": []
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9gc",
+    "label": "所属公司/单位名称",
+    "fieldData": {
+      "value": "VCN00507(镭富电子设备(上海)有限公司)"
+    }
+  },
+  {
+    "componentName": "RadioField",
+    "fieldId": "radioField_lzs3fswt",
+    "label": "是否为竞商？",
+    "fieldData": {
+      "value": "否",
+      "text": "否"
+    },
+    "options": [
+      {
+        "defaultChecked": false,
+        "syncLabelValue": true,
+        "__sid": "item_lzs3ftx2",
+        "text": "否",
+        "__sid__": "serial_lzs3ftx2",
+        "value": "否",
+        "sid": "serial_lzs3ftx2"
+      }
+    ]
+  },
+  {
+    "componentName": "TableField",
+    "fieldId": "tableField_lxv44os5",
+    "label": "人员信息",
+    "fieldData": {
+      "value": [
+        [
+          {
+            "componentName": "SelectField",
+            "fieldId": "selectField_lxv44orx",
+            "label": "有效身份证件",
+            "fieldData": {
+              "value": "身份证",
+              "text": "身份证"
+            },
+            "options": [
+              {
+                "defaultChecked": false,
+                "syncLabelValue": true,
+                "__sid": "item_lxjzgsg1",
+                "text": "身份证",
+                "__sid__": "serial_lxjzgsg0",
+                "value": "身份证",
+                "sid": "serial_lxjzgsg0"
+              }
+            ]
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44ory",
+            "label": "证件号码",
+            "fieldData": {
+              "value": "320882198910054470"
+            }
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44orw",
+            "label": "姓名",
+            "fieldData": {
+              "value": "肖鹏"
+            }
+          },
+          {
+            "componentName": "SelectField",
+            "fieldId": "selectField_mbyjhot6",
+            "label": "区号",
+            "fieldData": {
+              "value": "86",
+              "text": "+86"
+            },
+            "options": [
+              {
+                "defaultChecked": true,
+                "syncLabelValue": false,
+                "__sid": "item_megqe4lm",
+                "text": "+86",
+                "__sid__": "serial_megqe4ll",
+                "value": "86",
+                "sid": "serial_mbyjf8gm"
+              }
+            ]
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44orz",
+            "label": "联系方式",
+            "fieldData": {
+              "value": "17849759601"
+            }
+          },
+          {
+            "componentName": "ImageField",
+            "fieldId": "imageField_ly9i5k5q",
+            "label": "免冠照片",
+            "fieldData": {
+              "value": [
+                {
+                  "name": "1772413318784.jpg",
+                  "previewUrl": "https://dingtalk.avaryholding.com:8443/dingplus/image/20260302/5388c1b5b585227aad806b422ec7e9ce.jpg",
+                  "downloadUrl": "https://dingtalk.avaryholding.com:8443/dingplus/image/20260302/5388c1b5b585227aad806b422ec7e9ce.jpg",
+                  "size": 275591,
+                  "url": "https://dingtalk.avaryholding.com:8443/dingplus/image/20260302/5388c1b5b585227aad806b422ec7e9ce.jpg"
+                }
+              ]
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osj",
+            "label": "身份证照片",
+            "fieldData": {
+              "value": [
+                {
+                  "name": "IMG20260302090238.jpg",
+                  "previewUrl": "/o/W8E66E81CDM3P90RO50G6CZXVP172QMK5H8MM78?appType=APP_GRVPTEOQ6D4B7FLZFYNJ&fileName=APP_GRVPTEOQ6D4B7FLZFYNJ_VzhFNjZFODFDRE0zUDkwUk81MEc2Q1pYVlAxNzJRTUs1SDhNTTY4.jpg&instId=&type=open&process=image/resize,m_fill,w_200,h_200,limit_0/quality,q_80",
+                  "downloadUrl": "/o/W8E66E81CDM3P90RO50G6CZXVP172QMK5H8MM78?appType=APP_GRVPTEOQ6D4B7FLZFYNJ&fileName=APP_GRVPTEOQ6D4B7FLZFYNJ_VzhFNjZFODFDRE0zUDkwUk81MEc2Q1pYVlAxNzJRTUs1SDhNTTY4.jpg&instId=&type=download",
+                  "size": 2896532,
+                  "url": "/o/W8E66E81CDM3P90RO50G6CZXVP172QMK5H8MM78?appType=APP_GRVPTEOQ6D4B7FLZFYNJ&fileName=APP_GRVPTEOQ6D4B7FLZFYNJ_VzhFNjZFODFDRE0zUDkwUk81MEc2Q1pYVlAxNzJRTUs1SDhNTTY4.jpg&instId=&type=download",
+                  "fileUuid": "APP_GRVPTEOQ6D4B7FLZFYNJ_VzhFNjZFODFDRE0zUDkwUk81MEc2Q1pYVlAxNzJRTUs1SDhNTTY4.jpg"
+                }
+              ]
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osk",
+            "label": "社保/在职证明",
+            "fieldData": {
+              "value": []
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osn",
+            "label": "其他附件",
+            "fieldData": {
+              "value": []
+            }
+          }
+        ]
+      ]
+    },
+    "listNum": 50
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9f9",
+    "label": "接待人工号",
+    "fieldData": {
+      "value": "J6517999"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9f7",
+    "label": "接待人员",
+    "fieldData": {
+      "value": "李世伟"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9fc",
+    "label": "接待部门",
+    "fieldData": {
+      "value": "鐳射品檢組"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9fe",
+    "label": "接待人联系方式",
+    "fieldData": {
+      "value": "15140939212"
+    }
+  },
+  {
+    "componentName": "DateField",
+    "fieldId": "dateField_lxn9o9fh",
+    "label": "到访日期",
+    "fieldData": {
+      "value": 1772726400000
+    },
+    "format": "yyyy-MM-dd"
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_mjdmoase",
+    "label": "到访日期文本",
+    "fieldData": {
+      "value": "2026-03-06"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m4c5a419",
+    "label": "涉外签核",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m4c5a41a",
+    "label": "门岗保安",
+    "fieldData": {
+      "value": "15851745806"
+    }
+  }
+]

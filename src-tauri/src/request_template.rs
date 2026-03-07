@@ -3,22 +3,7 @@ use serde_json::Value;
 
 use crate::date_mapping::{to_date_text, to_midnight_timestamp_ms};
 
-const VALUE_TEMPLATE: &str = r#"[
-  {
-    "componentName": "DateField",
-    "label": "到访日期",
-    "fieldData": {
-      "value": 1772726400000
-    }
-  },
-  {
-    "componentName": "TextField",
-    "label": "到访日期文本",
-    "fieldData": {
-      "value": "2026-03-06"
-    }
-  }
-]"#;
+const VALUE_TEMPLATE: &str = include_str!("request_template.json");
 
 pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
     let mut payload: Value = serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
@@ -34,7 +19,10 @@ pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
             .get("componentName")
             .and_then(Value::as_str)
             .map(str::to_owned);
-        let label = field.get("label").and_then(Value::as_str).map(str::to_owned);
+        let label = field
+            .get("label")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
 
         let (Some(component_name), Some(label)) = (component_name, label) else {
             continue;
