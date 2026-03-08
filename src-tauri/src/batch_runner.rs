@@ -18,7 +18,7 @@ pub async fn run_batch_dates(
 
     for (index, date) in dates.into_iter().enumerate() {
         if stop_flag.load(Ordering::Relaxed) {
-            return Err("batch stopped manually".to_string());
+            return Err("批量提交已手动停止".to_string());
         }
 
         submitter.submit_date(date)?;

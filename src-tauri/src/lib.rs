@@ -142,28 +142,29 @@ async fn start_batch_submit(
     for reception in &receptions {
         let mut sorted_dates = dates.clone();
         sorted_dates.sort_unstable();
-        let mut existing_dates = history_store::get_recent_history(&app_handle)?
+        let mut existing_keys = history_store::get_recent_history(&app_handle)?
             .into_iter()
-            .map(|record| record.date)
+            .map(|record| format!("{}-{}", record.date, record.reception_id))
             .collect::<std::collections::HashSet<_>>();
 
         for (index, date_text) in sorted_dates.iter().enumerate() {
             let date_text = date_text.clone();
+            let key = format!("{}-{}", date_text, reception.employee_id);
             if app_state::is_stopped(&state) {
                 let _ = app_handle.emit(
                     "batch-log",
                     json!({ "date": date_text, "result": "stopped", "reason": "manual stop" }),
                 );
-                return Err("batch stopped manually".to_string());
+                return Err("批量提交已手动停止".to_string());
             }
 
-            if existing_dates.contains(&date_text) {
+            if existing_keys.contains(&key) {
                 let _ = app_handle.emit(
                     "batch-log",
                     json!({
                         "date": date_text,
                         "result": "skipped",
-                        "reason": "already exists in local history"
+                        "reason": format!("already exists in local history for reception {}", reception.employee_id)
                     }),
                 );
                 continue;
@@ -174,8 +175,8 @@ async fn start_batch_submit(
 
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
-                    existing_dates.insert(date_text.clone());
-                    history_store::upsert_success_record(&app_handle, &date_text)?;
+                    existing_keys.insert(key.clone());
+                    history_store::upsert_success_record(&app_handle, &date_text, &reception.employee_id)?;
 
                     let response_text = submit_result.response_text;
                     let _ = log_store::append_log(&app_handle, &json!({
@@ -189,7 +190,10 @@ async fn start_batch_submit(
                     let has_pending_after_current = sorted_dates
                         .iter()
                         .skip(index + 1)
-                        .any(|next_date| !existing_dates.contains(next_date));
+                        .any(|next_date| {
+                            let next_key = format!("{}-{}", next_date, reception.employee_id);
+                            !existing_keys.contains(&next_key)
+                        });
 
                     let wait_seconds =
                         has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
@@ -258,11 +262,12 @@ fn get_recent_history(
 }
 
 #[tauri::command]
-fn get_existing_dates(
+fn get_existing_keys(
     app_handle: tauri::AppHandle,
     dates: Vec<String>,
+    reception_id: String,
 ) -> Result<Vec<String>, String> {
-    history_store::get_existing_dates(&app_handle, &dates)
+    history_store::get_existing_keys(&app_handle, &dates, &reception_id)
 }
 
 #[tauri::command]
@@ -283,7 +288,7 @@ pub fn run() {
             start_batch_submit,
             stop_batch_submit,
             get_recent_history,
-            get_existing_dates,
+            get_existing_keys,
             load_form_state
         ])
         .run(tauri::generate_context!())

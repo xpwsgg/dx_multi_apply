@@ -94,7 +94,7 @@ pub fn build_payload(
         serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
     let fields = payload
         .as_array_mut()
-        .ok_or_else(|| "template payload is not an array".to_string())?;
+        .ok_or_else(|| "模板数据不是数组".to_string())?;
 
     let mut updated_date = false;
     let mut updated_text = false;
@@ -146,10 +146,10 @@ pub fn build_payload(
     }
 
     if !updated_date {
-        return Err("failed to locate DateField for 到访日期".to_string());
+        return Err("未找到到访日期字段".to_string());
     }
     if !updated_text {
-        return Err("failed to locate TextField for 到访日期文本".to_string());
+        return Err("未找到到访日期文本字段".to_string());
     }
 
     Ok(payload)
@@ -161,7 +161,7 @@ pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
         serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
     let fields = payload
         .as_array_mut()
-        .ok_or_else(|| "template payload is not an array".to_string())?;
+        .ok_or_else(|| "模板数据不是数组".to_string())?;
 
     let mut updated_date = false;
     let mut updated_text = false;
@@ -192,10 +192,10 @@ pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
     }
 
     if !updated_date {
-        return Err("failed to locate DateField for 到访日期".to_string());
+        return Err("未找到到访日期字段".to_string());
     }
     if !updated_text {
-        return Err("failed to locate TextField for 到访日期文本".to_string());
+        return Err("未找到到访日期文本字段".to_string());
     }
 
     Ok(payload)
@@ -204,7 +204,7 @@ pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
 pub fn extract_field_value(payload: &Value, label: &str) -> Result<String, String> {
     let fields = payload
         .as_array()
-        .ok_or_else(|| "payload is not an array".to_string())?;
+        .ok_or_else(|| "数据不是数组格式".to_string())?;
 
     for field in fields {
         if field.get("label").and_then(Value::as_str) != Some(label) {
@@ -214,14 +214,14 @@ pub fn extract_field_value(payload: &Value, label: &str) -> Result<String, Strin
         let value = field
             .get("fieldData")
             .and_then(|node| node.get("value"))
-            .ok_or_else(|| format!("missing fieldData.value for {label}"))?;
+            .ok_or_else(|| format!("字段 {} 缺少 fieldData.value", label))?;
 
         return match value {
             Value::String(text) => Ok(text.clone()),
             Value::Number(number) => Ok(number.to_string()),
-            _ => Err(format!("unsupported value type for {label}")),
+            _ => Err(format!("字段 {} 的值类型不支持", label)),
         };
     }
 
-    Err(format!("field {label} not found"))
+    Err(format!("未找到字段 {}", label))
 }

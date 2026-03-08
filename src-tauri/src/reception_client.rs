@@ -26,15 +26,15 @@ fn extract_reception_from_response(
     let records = body
         .pointer("/body/data")
         .and_then(Value::as_array)
-        .ok_or_else(|| "missing body.data in response".to_string())?;
+        .ok_or_else(|| "响应中缺少 body.data".to_string())?;
 
     let record = records
         .first()
-        .ok_or_else(|| format!("no reception record found for employee {employee_id}"))?;
+        .ok_or_else(|| format!("未找到员工 {employee_id} 的接待记录"))?;
 
     let form_data = record
         .get("formData")
-        .ok_or_else(|| "missing formData in record".to_string())?;
+        .ok_or_else(|| "记录中缺少 formData".to_string())?;
 
     let name = form_data
         .get("textField_m3pkk1ez")
@@ -56,7 +56,7 @@ fn extract_reception_from_response(
 
     if name.is_empty() {
         return Err(format!(
-            "reception name is empty for employee {employee_id}"
+            "员工 {employee_id} 的接待人姓名为空"
         ));
     }
 
@@ -103,22 +103,22 @@ pub async fn fetch_reception_info(employee_id: &str) -> Result<(ReceptionInfo, S
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| format!("fetch reception info failed: {e}"))?;
+        .map_err(|e| format!("获取接待人信息失败: {e}"))?;
 
     let status = response.status().as_u16();
     let text = response
         .text()
         .await
-        .map_err(|e| format!("failed to read response: {e}"))?;
+        .map_err(|e| format!("读取响应失败: {e}"))?;
 
     if !(200..=299).contains(&status) {
         return Err(format!(
-            "fetch reception info: status {status}, body: {text}"
+            "获取接待人信息: 状态码 {status}, 响应体: {text}"
         ));
     }
 
     let body: Value =
-        serde_json::from_str(&text).map_err(|e| format!("failed to parse json: {e}"))?;
+        serde_json::from_str(&text).map_err(|e| format!("解析 JSON 失败: {e}"))?;
 
     let info = extract_reception_from_response(employee_id, &body)?;
     Ok((info, text))

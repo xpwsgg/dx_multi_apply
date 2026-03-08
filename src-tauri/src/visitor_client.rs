@@ -28,7 +28,7 @@ fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
         serde_json::from_str(FETCH_DATA_TEMPLATE).map_err(|e| e.to_string())?;
     let fields = data
         .as_array_mut()
-        .ok_or_else(|| "fetch data template is not an array".to_string())?;
+        .ok_or_else(|| "获取数据模板不是数组".to_string())?;
 
     for field in fields.iter_mut() {
         let field_id = field
@@ -68,12 +68,12 @@ fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
 fn parse_json_string_array(arr: &Value) -> Result<Value, String> {
     let items = arr
         .as_array()
-        .ok_or_else(|| "expected array for media field".to_string())?;
+        .ok_or_else(|| "媒体字段需要数组格式".to_string())?;
     let mut result = Vec::new();
     for item in items {
         if let Some(s) = item.as_str() {
             let obj: Value = serde_json::from_str(s)
-                .map_err(|e| format!("failed to parse media json: {e}"))?;
+                .map_err(|e| format!("解析媒体JSON失败: {e}"))?;
             result.push(obj);
         } else {
             result.push(item.clone());
@@ -89,10 +89,10 @@ fn find_row_field_str(row: &[Value], field_id: &str) -> Result<String, String> {
                 .pointer("/fieldData/value")
                 .and_then(Value::as_str)
                 .map(String::from)
-                .ok_or_else(|| format!("missing string value for {field_id}"));
+                .ok_or_else(|| format!("字段 {field_id} 缺少字符串值"));
         }
     }
-    Err(format!("field {field_id} not found in row"))
+    Err(format!("行中未找到字段 {field_id}"))
 }
 
 fn find_row_field_value(row: &[Value], field_id: &str) -> Result<Value, String> {
@@ -104,7 +104,7 @@ fn find_row_field_value(row: &[Value], field_id: &str) -> Result<Value, String> 
                 .ok_or_else(|| format!("missing value for {field_id}"));
         }
     }
-    Err(format!("field {field_id} not found in row"))
+    Err(format!("行中未找到字段 {field_id}"))
 }
 
 fn extract_visitor_from_response(id_card: &str, body: &Value) -> Result<VisitorInfo, String> {

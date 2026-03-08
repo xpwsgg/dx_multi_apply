@@ -17,7 +17,7 @@ impl AppState {
 
 pub fn validate_dates(dates: &[String]) -> Result<(), String> {
     if dates.is_empty() {
-        return Err("dates cannot be empty".to_string());
+        return Err("日期不能为空".to_string());
     }
     Ok(())
 }

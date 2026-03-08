@@ -12,6 +12,7 @@ const RETENTION_DAYS: i64 = 30;
 #[serde(rename_all = "camelCase")]
 pub struct HistoryRecord {
     pub date: String,
+    pub reception_id: String,
     pub submitted_at: String,
 }
 
@@ -21,18 +22,19 @@ fn parse_submitted_at(value: &str) -> Option<DateTime<Utc>> {
         .map(|time| time.with_timezone(&Utc))
 }
 
-fn dedup_by_date(records: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
+fn dedup_by_key(records: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
     let mut map: HashMap<String, HistoryRecord> = HashMap::new();
 
     for record in records {
-        match map.get(&record.date) {
+        let key = format!("{}-{}", record.date, record.reception_id);
+        match map.get(&key) {
             Some(existing) => {
                 if record.submitted_at > existing.submitted_at {
-                    map.insert(record.date.clone(), record);
+                    map.insert(key, record);
                 }
             }
             None => {
-                map.insert(record.date.clone(), record);
+                map.insert(key, record);
             }
         }
     }
@@ -54,7 +56,7 @@ fn prune_recent(records: Vec<HistoryRecord>, now: DateTime<Utc>) -> Vec<HistoryR
         })
         .collect::<Vec<_>>();
 
-    dedup_by_date(filtered)
+    dedup_by_key(filtered)
 }
 
 fn history_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -129,20 +131,22 @@ pub fn get_recent_history(app_handle: &tauri::AppHandle) -> Result<Vec<HistoryRe
     Ok(records)
 }
 
-pub fn get_existing_dates(
+pub fn get_existing_keys(
     app_handle: &tauri::AppHandle,
     dates: &[String],
+    reception_id: &str,
 ) -> Result<Vec<String>, String> {
     let records = get_recent_history(app_handle)?;
-    let date_set = records
+    let key_set = records
         .into_iter()
-        .map(|record| record.date)
+        .map(|record| format!("{}-{}", record.date, record.reception_id))
         .collect::<HashSet<_>>();
 
     let mut existing = Vec::new();
     let mut seen = HashSet::new();
     for date in dates {
-        if date_set.contains(date) && seen.insert(date.clone()) {
+        let key = format!("{}-{}", date, reception_id);
+        if key_set.contains(&key) && seen.insert(date.clone()) {
             existing.push(date.clone());
         }
     }
@@ -150,49 +154,63 @@ pub fn get_existing_dates(
     Ok(existing)
 }
 
-pub fn upsert_success_record(app_handle: &tauri::AppHandle, date: &str) -> Result<(), String> {
+pub fn upsert_success_record(app_handle: &tauri::AppHandle, date: &str, reception_id: &str) -> Result<(), String> {
     let path = history_file_path(app_handle)?;
     let mut records = load_and_prune(&path)?;
 
     records.push(HistoryRecord {
         date: date.to_string(),
+        reception_id: reception_id.to_string(),
         submitted_at: Utc::now().to_rfc3339(),
     });
 
-    let records = dedup_by_date(records);
+    let records = dedup_by_key(records);
     write_records_to_file(&path, &records)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{dedup_by_date, prune_recent, HistoryRecord};
+    use super::{dedup_by_key, prune_recent, HistoryRecord};
     use chrono::{DateTime, Duration, Utc};
 
-    fn make_record(date: &str, submitted_at: DateTime<Utc>) -> HistoryRecord {
+    fn make_record(date: &str, reception_id: &str, submitted_at: DateTime<Utc>) -> HistoryRecord {
         HistoryRecord {
             date: date.to_string(),
+            reception_id: reception_id.to_string(),
             submitted_at: submitted_at.to_rfc3339(),
         }
     }
 
     #[test]
-    fn should_keep_latest_when_dates_are_duplicated() {
+    fn should_keep_latest_when_same_date_and_reception() {
         let now = Utc::now();
-        let older = make_record("2026-03-01", now - Duration::days(2));
-        let newer = make_record("2026-03-01", now - Duration::days(1));
-        let unique = make_record("2026-03-02", now);
+        let older = make_record("2026-03-01", "emp001", now - Duration::days(2));
+        let newer = make_record("2026-03-01", "emp001", now - Duration::days(1));
+        let unique = make_record("2026-03-02", "emp001", now);
 
-        let deduped = dedup_by_date(vec![older, newer.clone(), unique.clone()]);
+        let deduped = dedup_by_key(vec![older, newer.clone(), unique.clone()]);
         assert_eq!(deduped.len(), 2);
-        assert!(deduped.iter().any(|item| item.date == newer.date));
-        assert!(deduped.iter().any(|item| item.date == unique.date));
+        assert!(deduped.iter().any(|item| item.date == newer.date && item.reception_id == newer.reception_id));
+        assert!(deduped.iter().any(|item| item.date == unique.date && item.reception_id == unique.reception_id));
+    }
+
+    #[test]
+    fn should_allow_same_date_different_reception() {
+        let now = Utc::now();
+        let record1 = make_record("2026-03-01", "emp001", now);
+        let record2 = make_record("2026-03-01", "emp002", now);
+
+        let deduped = dedup_by_key(vec![record1.clone(), record2.clone()]);
+        assert_eq!(deduped.len(), 2);
+        assert!(deduped.iter().any(|item| item.reception_id == "emp001"));
+        assert!(deduped.iter().any(|item| item.reception_id == "emp002"));
     }
 
     #[test]
     fn should_prune_records_older_than_retention_window() {
         let now = Utc::now();
-        let old = make_record("2026-01-01", now - Duration::days(45));
-        let recent = make_record("2026-03-02", now - Duration::days(2));
+        let old = make_record("2026-01-01", "emp001", now - Duration::days(45));
+        let recent = make_record("2026-03-02", "emp001", now - Duration::days(2));
 
         let pruned = prune_recent(vec![old, recent.clone()], now);
         assert_eq!(pruned.len(), 1);
