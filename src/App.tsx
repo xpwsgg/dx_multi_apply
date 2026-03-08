@@ -143,18 +143,63 @@ function App() {
 
   useEffect(() => {
     void loadRecentHistory();
-    // Load saved form state
+    // Load saved form state and auto-query
     invoke<FormState | null>("load_form_state")
-      .then((saved) => {
+      .then(async (saved) => {
         if (!saved) return;
-        if (saved.account) setAccount(saved.account);
-        if (saved.receptionId) setReceptionId(saved.receptionId);
-        if (saved.visitorIdCards && saved.visitorIdCards.length > 0) {
-          const rows: VisitorRow[] = saved.visitorIdCards.map((idCard) => ({
+        const savedAccount = saved.account || "";
+        const savedReceptionId = saved.receptionId || "";
+        const savedIdCards = saved.visitorIdCards ?? [];
+
+        if (savedAccount) setAccount(savedAccount);
+        if (savedReceptionId) setReceptionId(savedReceptionId);
+
+        // Auto-query visitors
+        if (savedAccount && savedIdCards.length > 0) {
+          const rows: VisitorRow[] = savedIdCards.map((idCard) => ({
             idCard,
-            loading: false,
+            loading: true,
           }));
           setVisitors(rows);
+
+          for (let i = 0; i < savedIdCards.length; i++) {
+            const idCard = savedIdCards[i].trim();
+            if (!idCard) continue;
+            try {
+              const info = await invoke<VisitorInfo>("fetch_visitor_info", {
+                account: savedAccount.trim(),
+                idCard,
+              });
+              setVisitors((prev) =>
+                prev.map((v, idx) =>
+                  idx === i ? { ...v, loading: false, info, error: undefined } : v
+                )
+              );
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              setVisitors((prev) =>
+                prev.map((v, idx) =>
+                  idx === i ? { ...v, loading: false, info: undefined, error: msg } : v
+                )
+              );
+            }
+          }
+        }
+
+        // Auto-query reception
+        if (savedReceptionId.trim()) {
+          setReceptionLoading(true);
+          try {
+            const info = await invoke<ReceptionInfo>("fetch_reception_info", {
+              employeeId: savedReceptionId.trim(),
+            });
+            setReceptionInfo(info);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            setReceptionError(msg);
+          } finally {
+            setReceptionLoading(false);
+          }
         }
       })
       .catch((error) => {
