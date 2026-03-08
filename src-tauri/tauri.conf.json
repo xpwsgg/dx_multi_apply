@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "usersxiaodocumentscodevisit-batch-submitter",
+  "productName": "批量申请",
   "version": "0.1.0",
   "identifier": "com.xiao.usersxiaodocumentscodevisit-batch-submitter",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "usersxiaodocumentscodevisit-batch-submitter",
-        "width": 800,
-        "height": 600
+        "title": "批量申请",
+        "width": 1280,
+        "height": 800
       }
     ],
     "security": {

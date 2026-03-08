@@ -1,0 +1,124 @@
+[
+  {
+    "type": "LINKDATA",
+    "fieldId": "textField_lxv44orw",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "textField_lxv44ory",
+      "selectField_lxv44orx"
+    ],
+    "componentName": "TextField",
+    "label": "姓名",
+    "resultLimitNum": 1,
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"textField_lz0ork48\",false,QUERYAND(QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx})),1,1)",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  },
+  {
+    "type": "LINKDATA",
+    "fieldId": "textField_lxv44orz",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "selectField_lxv44orx",
+      "textField_lxv44ory"
+    ],
+    "componentName": "TextField",
+    "label": "联系方式",
+    "resultLimitNum": 1,
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"textField_lz0ork47\",false,QUERYAND(QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory})),1,1)",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  },
+  {
+    "type": "LINKDATA",
+    "fieldId": "imageField_ly9i5k5q",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "textField_lxv44ory",
+      "selectField_lxv44orx"
+    ],
+    "componentName": "ImageField",
+    "label": "免冠照片",
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"imageField_lz0ork5a\",false,QUERYAND(QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx})))",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  },
+  {
+    "type": "LINKDATA",
+    "fieldId": "attachmentField_lxv44osj",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "selectField_lxv44orx",
+      "textField_lxv44ory"
+    ],
+    "componentName": "AttachmentField",
+    "label": "身份证照片",
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"attachmentField_lz0ork5b\",false,QUERYAND(QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory})))",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  },
+  {
+    "type": "LINKDATA",
+    "fieldId": "attachmentField_lxv44osk",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "selectField_lxv44orx",
+      "textField_lxv44ory"
+    ],
+    "componentName": "AttachmentField",
+    "label": "社保/在职证明",
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"attachmentField_lz0ork5c\",false,QUERYAND(QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory})))",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  },
+  {
+    "type": "LINKDATA",
+    "fieldId": "attachmentField_lxv44osn",
+    "tableFieldId": "tableField_lxv44os5",
+    "specialFieldIds": [
+      "textField_lxv44ory",
+      "selectField_lxv44orx"
+    ],
+    "componentName": "AttachmentField",
+    "label": "其他附件",
+    "formRule": "FETCHDISTINCTDATA(\"FORM-BC3B81F03A1E43E59739DC87E426E5FARFB2\",\"attachmentField_lz0ork5d\",false,QUERYAND(QUERYEQ(\"textField_lz0pled5\",#{textField_ly2ugh3m}),QUERYEQ(\"textField_lz0pled4\",#{textField_lxn9o9e0}),QUERYEQ(\"textField_lz0ork49\",#{textField_lxv44ory}),QUERYEQ(\"textField_lz0ork43\",#{selectField_lxv44orx})))",
+    "acrossAppType": "APP_GRVPTEOQ6D4B7FLZFYNJ",
+    "priority": 1,
+    "evaluateTableRow": [
+      1
+    ],
+    "evaluateTableRowName": [
+      "tfitem_1"
+    ]
+  }
+]

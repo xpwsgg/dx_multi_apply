@@ -1,0 +1,248 @@
+[
+  {
+    "componentName": "SerialNumberField",
+    "fieldId": "serialNumberField_lxn9o9dx",
+    "fieldData": {}
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9e0",
+    "fieldData": {
+      "value": "一般访客"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly2ugh3m",
+    "fieldData": {
+      "value": "17849759601"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lydnpzas",
+    "fieldData": {
+      "value": "HA"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly3uw4as",
+    "fieldData": {
+      "value": "1040"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_ly3uw4ar",
+    "fieldData": {
+      "value": "HB"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m2lk8mr2",
+    "fieldData": {
+      "value": "VCN00507"
+    }
+  },
+  {
+    "componentName": "RadioField",
+    "fieldId": "radioField_m4g9sf7c",
+    "fieldData": {
+      "value": "否",
+      "text": "否"
+    }
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_ly3o95xh",
+    "fieldData": {
+      "value": "淮安第二园区",
+      "text": "淮安第二园区"
+    }
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_ly3o95xf",
+    "fieldData": {
+      "value": "庆鼎精密电子(淮安)有限公司",
+      "text": "庆鼎精密电子(淮安)有限公司"
+    }
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9eb",
+    "fieldData": {}
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9ed",
+    "fieldData": {}
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9ei",
+    "fieldData": {}
+  },
+  {
+    "componentName": "TextareaField",
+    "fieldId": "textareaField_lxn9o9eg",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "SelectField",
+    "fieldId": "selectField_lxn9o9em",
+    "fieldData": {
+      "value": "VCN00507(镭富电子设备(上海)有限公司)"
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9gc",
+    "fieldData": {
+      "value": "VCN00507(镭富电子设备(上海)有限公司)"
+    }
+  },
+  {
+    "componentName": "RadioField",
+    "fieldId": "radioField_lzs3fswt",
+    "fieldData": {
+      "value": "否",
+      "text": "否"
+    }
+  },
+  {
+    "componentName": "TableField",
+    "fieldId": "tableField_lxv44os5",
+    "fieldData": {
+      "value": [
+        [
+          {
+            "componentName": "SelectField",
+            "fieldId": "selectField_lxv44orx",
+            "fieldData": {
+              "value": "身份证",
+              "text": "身份证"
+            }
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44ory",
+            "fieldData": {
+              "value": "320882198910054470"
+            }
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44orw",
+            "fieldData": {
+              "value": ""
+            }
+          },
+          {
+            "componentName": "SelectField",
+            "fieldId": "selectField_mbyjhot6",
+            "fieldData": {
+              "value": "86",
+              "text": "+86"
+            }
+          },
+          {
+            "componentName": "TextField",
+            "fieldId": "textField_lxv44orz",
+            "fieldData": {
+              "value": ""
+            }
+          },
+          {
+            "componentName": "ImageField",
+            "fieldId": "imageField_ly9i5k5q",
+            "fieldData": {
+              "value": []
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osj",
+            "fieldData": {
+              "value": []
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osk",
+            "fieldData": {
+              "value": []
+            }
+          },
+          {
+            "componentName": "AttachmentField",
+            "fieldId": "attachmentField_lxv44osn",
+            "fieldData": {
+              "value": []
+            }
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9f9",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9f7",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9fc",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_lxn9o9fe",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "DateField",
+    "fieldId": "dateField_lxn9o9fh",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_mjdmoase",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m4c5a419",
+    "fieldData": {
+      "value": ""
+    }
+  },
+  {
+    "componentName": "TextField",
+    "fieldId": "textField_m4c5a41a",
+    "fieldData": {
+      "value": "15851745806"
+    }
+  }
+]
