@@ -20,6 +20,13 @@ type ReceptionInfo = {
   phone: string;
 };
 
+type ReceptionRow = {
+  employeeId: string;
+  loading: boolean;
+  info?: ReceptionInfo;
+  error?: string;
+};
+
 type VisitorRow = {
   idCard: string;
   loading: boolean;
@@ -51,7 +58,7 @@ type HistoryRecord = {
 type FormState = {
   account: string;
   visitorIdCards: string[];
-  receptionId: string;
+  receptionIds: string[];
 };
 
 function normalizeLog(payload: BatchLogPayload): BatchLogItem {
@@ -88,10 +95,9 @@ function App() {
   const [visitors, setVisitors] = useState<VisitorRow[]>([
     { idCard: "", loading: false },
   ]);
-  const [receptionId, setReceptionId] = useState("");
-  const [receptionLoading, setReceptionLoading] = useState(false);
-  const [receptionInfo, setReceptionInfo] = useState<ReceptionInfo | undefined>();
-  const [receptionError, setReceptionError] = useState<string | undefined>();
+  const [receptions, setReceptions] = useState<ReceptionRow[]>([
+    { employeeId: "", loading: false },
+  ]);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -107,11 +113,11 @@ function App() {
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
   const allVisitorsReady = visitors.length > 0 && visitors.every((v) => v.info && !v.loading);
-  const receptionReady = !!receptionInfo && !receptionLoading;
+  const allReceptionsReady = receptions.length > 0 && receptions.every((r) => r.info && !r.loading);
   const canSubmit =
     account.trim().length > 0 &&
     allVisitorsReady &&
-    receptionReady &&
+    allReceptionsReady &&
     dates.length > 0 &&
     !isRunning;
 
@@ -148,11 +154,10 @@ function App() {
       .then(async (saved) => {
         if (!saved) return;
         const savedAccount = saved.account || "";
-        const savedReceptionId = saved.receptionId || "";
+        const savedReceptionIds = saved.receptionIds ?? [];
         const savedIdCards = saved.visitorIdCards ?? [];
 
         if (savedAccount) setAccount(savedAccount);
-        if (savedReceptionId) setReceptionId(savedReceptionId);
 
         // Auto-query visitors
         if (savedAccount && savedIdCards.length > 0) {
@@ -186,19 +191,34 @@ function App() {
           }
         }
 
-        // Auto-query reception
-        if (savedReceptionId.trim()) {
-          setReceptionLoading(true);
-          try {
-            const info = await invoke<ReceptionInfo>("fetch_reception_info", {
-              employeeId: savedReceptionId.trim(),
-            });
-            setReceptionInfo(info);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            setReceptionError(msg);
-          } finally {
-            setReceptionLoading(false);
+        // Auto-query receptions
+        if (savedAccount && savedReceptionIds.length > 0) {
+          const rows: ReceptionRow[] = savedReceptionIds.map((employeeId) => ({
+            employeeId,
+            loading: true,
+          }));
+          setReceptions(rows);
+
+          for (let i = 0; i < savedReceptionIds.length; i++) {
+            const employeeId = savedReceptionIds[i].trim();
+            if (!employeeId) continue;
+            try {
+              const info = await invoke<ReceptionInfo>("fetch_reception_info", {
+                employeeId,
+              });
+              setReceptions((prev) =>
+                prev.map((r, idx) =>
+                  idx === i ? { ...r, loading: false, info, error: undefined } : r
+                )
+              );
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              setReceptions((prev) =>
+                prev.map((r, idx) =>
+                  idx === i ? { ...r, loading: false, info: undefined, error: msg } : r
+                )
+              );
+            }
           }
         }
       })
@@ -357,27 +377,55 @@ function App() {
     );
   };
 
-  const queryReception = async () => {
-    if (!receptionId.trim()) {
+  const queryReception = async (index: number) => {
+    const row = receptions[index];
+    if (!row || !row.employeeId.trim()) {
       setErrorMessage("请填写接待人员工号");
       return;
     }
 
-    setReceptionLoading(true);
-    setReceptionError(undefined);
+    setReceptions((prev) =>
+      prev.map((r, i) =>
+        i === index ? { ...r, loading: true, error: undefined } : r
+      )
+    );
 
     try {
       const info = await invoke<ReceptionInfo>("fetch_reception_info", {
-        employeeId: receptionId.trim(),
+        employeeId: row.employeeId.trim(),
       });
-      setReceptionInfo(info);
+      setReceptions((prev) =>
+        prev.map((r, i) =>
+          i === index ? { ...r, loading: false, info, error: undefined } : r
+        )
+      );
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      setReceptionError(msg);
-      setReceptionInfo(undefined);
-    } finally {
-      setReceptionLoading(false);
+      setReceptions((prev) =>
+        prev.map((r, i) =>
+          i === index
+            ? { ...r, loading: false, info: undefined, error: msg }
+            : r
+        )
+      );
     }
+  };
+
+  const addReception = () => {
+    setReceptions((prev) => [...prev, { employeeId: "", loading: false }]);
+  };
+
+  const removeReception = (index: number) => {
+    if (receptions.length <= 1) return;
+    setReceptions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateReceptionEmployeeId = (index: number, value: string) => {
+    setReceptions((prev) =>
+      prev.map((r, i) =>
+        i === index ? { ...r, employeeId: value, info: undefined, error: undefined } : r
+      )
+    );
   };
 
   useEffect(() => {
@@ -408,7 +456,11 @@ function App() {
       .filter((v) => v.info)
       .map((v) => v.info as VisitorInfo);
 
-    if (confirmedVisitors.length === 0 || !receptionInfo) {
+    const confirmedReceptions = receptions
+      .filter((r) => r.info)
+      .map((r) => r.info as ReceptionInfo);
+
+    if (confirmedVisitors.length === 0 || confirmedReceptions.length === 0) {
       setErrorMessage("请先查询所有访客和接待人信息");
       return;
     }
@@ -423,7 +475,7 @@ function App() {
       await invoke("start_batch_submit", {
         account: account.trim(),
         visitors: confirmedVisitors,
-        reception: receptionInfo,
+        receptions: confirmedReceptions,
         dates,
       });
       window.alert("任务已完成");
@@ -537,41 +589,63 @@ function App() {
         </div>
 
         <div className="block">
-          <h2>3. 接待人信息</h2>
-          <div className="reception-row">
-            <input
-              type="text"
-              placeholder="员工号"
-              value={receptionId}
-              disabled={isRunning || receptionLoading}
-              onChange={(e) => {
-                setReceptionId(e.currentTarget.value);
-                setReceptionInfo(undefined);
-                setReceptionError(undefined);
-              }}
-            />
-            <button
-              type="button"
-              disabled={
-                isRunning || receptionLoading || !receptionId.trim()
-              }
-              onClick={queryReception}
-            >
-              {receptionLoading ? "查询中..." : "查询"}
-            </button>
+          <h2>3. 接待人管理</h2>
+          <div className="reception-list">
+            {receptions.map((reception, index) => (
+              <div key={index} className="reception-row">
+                <div className="reception-input-group">
+                  <input
+                    type="text"
+                    placeholder="员工号"
+                    value={reception.employeeId}
+                    disabled={isRunning || reception.loading}
+                    onChange={(e) =>
+                      updateReceptionEmployeeId(index, e.currentTarget.value)
+                    }
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      isRunning || reception.loading || !reception.employeeId.trim()
+                    }
+                    onClick={() => queryReception(index)}
+                  >
+                    {reception.loading ? "查询中..." : "查询"}
+                  </button>
+                  {receptions.length > 1 ? (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      disabled={isRunning}
+                      onClick={() => removeReception(index)}
+                    >
+                      删除
+                    </button>
+                  ) : null}
+                </div>
+                {reception.info ? (
+                  <div className="reception-info">
+                    <span className="badge-success">已查询</span>
+                    <span>
+                      {reception.info.name} | {reception.info.department} |{" "}
+                      {reception.info.phone}
+                    </span>
+                  </div>
+                ) : null}
+                {reception.error ? (
+                  <p className="field-error">{reception.error}</p>
+                ) : null}
+              </div>
+            ))}
           </div>
-          {receptionInfo ? (
-            <div className="reception-info">
-              <span className="badge-success">已查询</span>
-              <span>
-                {receptionInfo.name} | {receptionInfo.department} |{" "}
-                {receptionInfo.phone}
-              </span>
-            </div>
-          ) : null}
-          {receptionError ? (
-            <p className="field-error">{receptionError}</p>
-          ) : null}
+          <button
+            type="button"
+            className="btn-add"
+            disabled={isRunning}
+            onClick={addReception}
+          >
+            + 添加接待人
+          </button>
         </div>
 
         <div className="block">
@@ -641,7 +715,7 @@ function App() {
               停止提交
             </button>
           </div>
-          {!allVisitorsReady || !receptionReady ? (
+          {!allVisitorsReady || !allReceptionsReady ? (
             <p className="hint">
               请先完成所有访客查询和接待人查询后再提交。
             </p>

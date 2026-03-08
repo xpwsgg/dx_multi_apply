@@ -10,7 +10,7 @@ const FORM_STATE_FILE_NAME: &str = "form_state.json";
 pub struct FormState {
     pub account: String,
     pub visitor_id_cards: Vec<String>,
-    pub reception_id: String,
+    pub reception_ids: Vec<String>,
 }
 
 fn form_state_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {

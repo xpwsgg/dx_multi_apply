@@ -281,15 +281,28 @@ button:disabled {
 
 /* ---- Reception ---- */
 
+.reception-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .reception-row {
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+}
+
+.reception-input-group {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.reception-row input {
+.reception-input-group input {
   flex: 1;
-  max-width: 260px;
+  min-width: 0;
 }
 
 .reception-info {
@@ -567,11 +580,11 @@ button:disabled {
     flex-wrap: wrap;
   }
 
-  .reception-row {
+  .reception-input-group {
     flex-wrap: wrap;
   }
 
-  .reception-row input {
+  .reception-input-group input {
     max-width: none;
   }
 

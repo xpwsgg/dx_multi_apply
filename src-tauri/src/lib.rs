@@ -116,7 +116,7 @@ async fn start_batch_submit(
     state: tauri::State<'_, app_state::AppState>,
     account: String,
     visitors: Vec<VisitorInfo>,
-    reception: ReceptionInfo,
+    receptions: Vec<ReceptionInfo>,
     dates: Vec<String>,
 ) -> Result<(), String> {
     app_state::validate_dates(&dates)?;
@@ -126,102 +126,110 @@ async fn start_batch_submit(
         return Err("至少需要一个访客".to_string());
     }
 
+    if receptions.is_empty() {
+        return Err("至少需要一个接待人".to_string());
+    }
+
     // Save form state for next session
     let form_state = form_state_store::FormState {
         account: account.clone(),
         visitor_id_cards: visitors.iter().map(|v| v.id_card.clone()).collect(),
-        reception_id: reception.employee_id.clone(),
+        reception_ids: receptions.iter().map(|r| r.employee_id.clone()).collect(),
     };
     let _ = form_state_store::save_form_state(&app_handle, &form_state);
 
-    let mut sorted_dates = dates;
-    sorted_dates.sort_unstable();
-    let mut existing_dates = history_store::get_recent_history(&app_handle)?
-        .into_iter()
-        .map(|record| record.date)
-        .collect::<std::collections::HashSet<_>>();
+    // Iterate through each reception and submit
+    for reception in &receptions {
+        let mut sorted_dates = dates.clone();
+        sorted_dates.sort_unstable();
+        let mut existing_dates = history_store::get_recent_history(&app_handle)?
+            .into_iter()
+            .map(|record| record.date)
+            .collect::<std::collections::HashSet<_>>();
 
-    for (index, date_text) in sorted_dates.iter().enumerate() {
-        let date_text = date_text.clone();
-        if app_state::is_stopped(&state) {
-            let _ = app_handle.emit(
-                "batch-log",
-                json!({ "date": date_text, "result": "stopped", "reason": "manual stop" }),
-            );
-            return Err("batch stopped manually".to_string());
-        }
-
-        if existing_dates.contains(&date_text) {
-            let _ = app_handle.emit(
-                "batch-log",
-                json!({
-                    "date": date_text,
-                    "result": "skipped",
-                    "reason": "already exists in local history"
-                }),
-            );
-            continue;
-        }
-
-        let date = NaiveDate::parse_from_str(&date_text, "%Y-%m-%d")
-            .map_err(|err| format!("invalid date {date_text}: {err}"))?;
-
-        match submit_client::submit_once(&account, &visitors, &reception, date).await {
-            Ok(submit_result) => {
-                existing_dates.insert(date_text.clone());
-                history_store::upsert_success_record(&app_handle, &date_text)?;
-
-                let response_text = submit_result.response_text;
-                let _ = log_store::append_log(&app_handle, &json!({
-                    "timestamp": Utc::now().to_rfc3339(),
-                    "operation": "submit",
-                    "request_summary": format!("date={date_text}"),
-                    "status": submit_result.status_code,
-                    "response_body": response_text
-                }));
-
-                let has_pending_after_current = sorted_dates
-                    .iter()
-                    .skip(index + 1)
-                    .any(|next_date| !existing_dates.contains(next_date));
-
-                let wait_seconds =
-                    has_pending_after_current.then(|| rand::thread_rng().gen_range(60..=120));
-                let mut success_payload = json!({
-                    "date": date_text,
-                    "result": "success",
-                    "responseRaw": response_text
-                });
-                if let Some(wait_seconds) = wait_seconds {
-                    success_payload["waitSeconds"] = json!(wait_seconds);
-                }
-                let _ = app_handle.emit("batch-log", success_payload);
-
-                if let Some(wait_seconds) = wait_seconds {
-                    if !app_state::is_stopped(&state) {
-                        tokio::time::sleep(std::time::Duration::from_secs(wait_seconds)).await;
-                    }
-                }
+        for (index, date_text) in sorted_dates.iter().enumerate() {
+            let date_text = date_text.clone();
+            if app_state::is_stopped(&state) {
+                let _ = app_handle.emit(
+                    "batch-log",
+                    json!({ "date": date_text, "result": "stopped", "reason": "manual stop" }),
+                );
+                return Err("batch stopped manually".to_string());
             }
-            Err(err) => {
-                let reason = err.message.clone();
-                let _ = log_store::append_log(&app_handle, &json!({
-                    "timestamp": Utc::now().to_rfc3339(),
-                    "operation": "submit",
-                    "request_summary": format!("date={date_text}"),
-                    "status": 0,
-                    "response_body": err.response_raw
-                }));
+
+            if existing_dates.contains(&date_text) {
                 let _ = app_handle.emit(
                     "batch-log",
                     json!({
                         "date": date_text,
-                        "result": "failed",
-                        "reason": reason,
-                        "responseRaw": err.response_raw
+                        "result": "skipped",
+                        "reason": "already exists in local history"
                     }),
                 );
-                return Err(reason);
+                continue;
+            }
+
+            let date = NaiveDate::parse_from_str(&date_text, "%Y-%m-%d")
+                .map_err(|err| format!("invalid date {date_text}: {err}"))?;
+
+            match submit_client::submit_once(&account, &visitors, reception, date).await {
+                Ok(submit_result) => {
+                    existing_dates.insert(date_text.clone());
+                    history_store::upsert_success_record(&app_handle, &date_text)?;
+
+                    let response_text = submit_result.response_text;
+                    let _ = log_store::append_log(&app_handle, &json!({
+                        "timestamp": Utc::now().to_rfc3339(),
+                        "operation": "submit",
+                        "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
+                        "status": submit_result.status_code,
+                        "response_body": response_text
+                    }));
+
+                    let has_pending_after_current = sorted_dates
+                        .iter()
+                        .skip(index + 1)
+                        .any(|next_date| !existing_dates.contains(next_date));
+
+                    let wait_seconds =
+                        has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
+                    let mut success_payload = json!({
+                        "date": date_text,
+                        "result": "success",
+                        "reason": format!("接待人: {}", reception.name),
+                        "responseRaw": response_text
+                    });
+                    if let Some(wait_seconds) = wait_seconds {
+                        success_payload["waitSeconds"] = json!(wait_seconds);
+                    }
+                    let _ = app_handle.emit("batch-log", success_payload);
+
+                    if let Some(wait_seconds) = wait_seconds {
+                        if !app_state::is_stopped(&state) {
+                            tokio::time::sleep(std::time::Duration::from_secs(wait_seconds)).await;
+                        }
+                    }
+                }
+                Err(err) => {
+                    let reason = err.message.clone();
+                    let _ = log_store::append_log(&app_handle, &json!({
+                        "timestamp": Utc::now().to_rfc3339(),
+                        "operation": "submit",
+                        "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
+                        "status": 0,
+                        "response_body": err.response_raw
+                    }));
+                    let _ = app_handle.emit(
+                        "batch-log",
+                        json!({
+                            "date": date_text,
+                            "result": "failed",
+                            "reason": format!("接待人 {}: {}", reception.name, reason),
+                            "responseRaw": err.response_raw
+                        }),
+                    );
+                    return Err(format!("接待人 {}: {}", reception.name, reason));
+                }
             }
         }
     }
