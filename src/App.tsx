@@ -61,6 +61,11 @@ type FormState = {
   receptionIds: string[];
 };
 
+type LogActionFeedback = {
+  type: "success" | "error";
+  message: string;
+};
+
 function normalizeLog(payload: BatchLogPayload): BatchLogItem {
   return {
     date: typeof payload.date === "string" ? payload.date : undefined,
@@ -90,6 +95,51 @@ function formatHistoryTime(iso: string): string {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
+function serializeLogs(logs: BatchLogItem[]): string {
+  return logs
+    .map((log, index) => {
+      const target =
+        log.result === "visitor_query"
+          ? "[访客查询]"
+          : log.result === "reception_query"
+            ? "[接待人查询]"
+            : log.date ?? "-";
+      const wait =
+        typeof log.waitSeconds === "number" ? ` | 等待 ${log.waitSeconds}s` : "";
+      const lines = [`[${index + 1}] ${target} | ${log.result}${wait}`];
+      if (log.reason) {
+        lines.push(`原因: ${log.reason}`);
+      }
+      if (log.responseRaw) {
+        lines.push("响应:");
+        lines.push(log.responseRaw);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("浏览器不支持自动复制");
+  }
+}
+
 function App() {
   const [account, setAccount] = useState("");
   const [visitors, setVisitors] = useState<VisitorRow[]>([
@@ -109,6 +159,7 @@ function App() {
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [logActionFeedback, setLogActionFeedback] = useState<LogActionFeedback | null>(null);
 
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
@@ -290,6 +341,18 @@ function App() {
       window.clearInterval(timer);
     };
   }, [isRunning]);
+
+  useEffect(() => {
+    if (!logActionFeedback) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLogActionFeedback(null);
+    }, 2200);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [logActionFeedback]);
 
   useEffect(() => {
     let disposed = false;
@@ -503,6 +566,26 @@ function App() {
       await invoke("stop_batch_submit");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+    setLogActionFeedback({ type: "success", message: "日志已清空" });
+  };
+
+  const copyAllLogs = async () => {
+    if (logs.length === 0) {
+      return;
+    }
+    try {
+      await copyText(serializeLogs(logs));
+      setLogActionFeedback({ type: "success", message: "日志已复制到剪贴板" });
+    } catch (error) {
+      setLogActionFeedback({
+        type: "error",
+        message: `复制日志失败: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
   };
 
@@ -736,7 +819,61 @@ function App() {
 
       <aside className="panel panel-right">
         <div className="block">
-          <h2>7. 日志</h2>
+          <div className="block-header">
+            <h2>7. 日志</h2>
+            <div className="icon-actions">
+              <button
+                type="button"
+                className="icon-action-btn"
+                onClick={copyAllLogs}
+                disabled={logs.length === 0}
+                title="复制全部日志"
+                aria-label="复制全部日志"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="icon-action-btn icon-action-btn-danger"
+                onClick={clearLogs}
+                disabled={logs.length === 0}
+                title="清空日志"
+                aria-label="清空日志"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          {logActionFeedback ? (
+            <p className={`log-action-feedback log-action-feedback-${logActionFeedback.type}`}>
+              {logActionFeedback.message}
+            </p>
+          ) : null}
           <div className="log-box">
             {logs.length === 0 ? <p className="empty">暂无日志</p> : null}
             {logs.map((log, index) => (
