@@ -154,6 +154,31 @@ pub fn get_existing_keys(
     Ok(existing)
 }
 
+fn collect_existing_dates(records: &[HistoryRecord], dates: &[String]) -> Vec<String> {
+    let date_set = records
+        .iter()
+        .map(|record| record.date.clone())
+        .collect::<HashSet<_>>();
+
+    let mut existing = Vec::new();
+    let mut seen = HashSet::new();
+    for date in dates {
+        if date_set.contains(date) && seen.insert(date.clone()) {
+            existing.push(date.clone());
+        }
+    }
+
+    existing
+}
+
+pub fn get_existing_dates(
+    app_handle: &tauri::AppHandle,
+    dates: &[String],
+) -> Result<Vec<String>, String> {
+    let records = get_recent_history(app_handle)?;
+    Ok(collect_existing_dates(&records, dates))
+}
+
 pub fn upsert_success_record(app_handle: &tauri::AppHandle, date: &str, reception_id: &str) -> Result<(), String> {
     let path = history_file_path(app_handle)?;
     let mut records = load_and_prune(&path)?;
@@ -170,7 +195,7 @@ pub fn upsert_success_record(app_handle: &tauri::AppHandle, date: &str, receptio
 
 #[cfg(test)]
 mod tests {
-    use super::{dedup_by_key, prune_recent, HistoryRecord};
+    use super::{collect_existing_dates, dedup_by_key, prune_recent, HistoryRecord};
     use chrono::{DateTime, Duration, Utc};
 
     fn make_record(date: &str, reception_id: &str, submitted_at: DateTime<Utc>) -> HistoryRecord {
@@ -215,5 +240,30 @@ mod tests {
         let pruned = prune_recent(vec![old, recent.clone()], now);
         assert_eq!(pruned.len(), 1);
         assert_eq!(pruned[0].date, recent.date);
+    }
+
+    #[test]
+    fn should_collect_existing_dates_without_duplicates() {
+        let now = Utc::now();
+        let records = vec![
+            make_record("2026-03-01", "emp001", now),
+            make_record("2026-03-01", "emp002", now),
+            make_record("2026-03-03", "emp001", now),
+        ];
+
+        let existing = collect_existing_dates(
+            &records,
+            &[
+                "2026-03-01".to_string(),
+                "2026-03-02".to_string(),
+                "2026-03-01".to_string(),
+                "2026-03-03".to_string(),
+            ],
+        );
+
+        assert_eq!(
+            existing,
+            vec!["2026-03-01".to_string(), "2026-03-03".to_string()]
+        );
     }
 }

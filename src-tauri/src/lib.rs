@@ -271,6 +271,14 @@ fn get_existing_keys(
 }
 
 #[tauri::command]
+fn get_existing_dates(
+    app_handle: tauri::AppHandle,
+    dates: Vec<String>,
+) -> Result<Vec<String>, String> {
+    history_store::get_existing_dates(&app_handle, &dates)
+}
+
+#[tauri::command]
 fn load_form_state(
     app_handle: tauri::AppHandle,
 ) -> Result<Option<form_state_store::FormState>, String> {
@@ -289,6 +297,7 @@ pub fn run() {
             stop_batch_submit,
             get_recent_history,
             get_existing_keys,
+            get_existing_dates,
             load_form_state
         ])
         .run(tauri::generate_context!())
