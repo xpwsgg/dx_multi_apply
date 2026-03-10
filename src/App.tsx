@@ -711,7 +711,7 @@ function App() {
                     }
                     onClick={() => queryVisitor(index)}
                   >
-                    {visitor.loading ? "查询中..." : "查询"}
+                    {visitor.loading ? "查询中..." : "确认"}
                   </button>
                   {visitors.length > 1 ? (
                     <button
