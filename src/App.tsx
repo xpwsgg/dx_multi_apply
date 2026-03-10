@@ -51,11 +51,6 @@ type BatchLogPayload = {
   responseRaw?: unknown;
 };
 
-type HistoryRecord = {
-  date: string;
-  submittedAt: string;
-};
-
 type FormState = {
   account: string;
   visitorIdCards: string[];
@@ -65,6 +60,29 @@ type FormState = {
 type LogActionFeedback = {
   type: "success" | "error";
   message: string;
+};
+
+type LoginStatus = "idle" | "logging-in" | "logged-in" | "failed";
+
+type LoginResultPayload = {
+  success?: boolean;
+  phone?: string;
+  obtainedAt?: string;
+  error?: string;
+  status?: string;
+};
+
+type VisitorStatusRecord = {
+  flowNum: string;
+  visitorName: string;
+  visitCompany: string;
+  visitPark: string;
+  applyType: string;
+  rPersonName: string;
+  rPersonPhone: string;
+  dateStart: string;
+  dateEnd: string;
+  flowStatus: string;
 };
 
 function normalizeLog(payload: BatchLogPayload): BatchLogItem {
@@ -155,13 +173,18 @@ function App() {
   const [dates, setDates] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState<BatchLogItem[]>([]);
-  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [existingDates, setExistingDates] = useState<string[]>([]);
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [logActionFeedback, setLogActionFeedback] = useState<LogActionFeedback | null>(null);
   const [factoryInfo, setFactoryInfo] = useState<{ company: string; part: string; applyType: string } | null>(null);
+  const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
+  const [loginError, setLoginError] = useState("");
+  const [loginObtainedAt, setLoginObtainedAt] = useState("");
+  const [statusRecords, setStatusRecords] = useState<VisitorStatusRecord[]>([]);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
@@ -173,15 +196,6 @@ function App() {
     allReceptionsReady &&
     dates.length > 0 &&
     !isRunning;
-
-  const loadRecentHistory = async () => {
-    try {
-      const records = await invoke<HistoryRecord[]>("get_recent_history");
-      setHistoryRecords(records);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    }
-  };
 
   const syncExistingDates = async (targetDates: string[]) => {
     if (targetDates.length === 0) {
@@ -208,7 +222,110 @@ function App() {
         applyType: info.applyType,
       });
     });
+    // Check for existing token on startup and validate it
+    invoke<{ phone: string; obtainedAt: string } | null>("get_token_status").then(
+      async (status) => {
+        if (!status) return;
+        setLoginObtainedAt(status.obtainedAt);
+        setLoginStatus("logging-in");
+        try {
+          const valid = await invoke<boolean>("check_token");
+          setLoginStatus(valid ? "logged-in" : "idle");
+          if (!valid) {
+            setLoginError("登录已失效，请重新登录");
+          }
+        } catch {
+          setLoginStatus("idle");
+        }
+      }
+    );
   }, []);
+
+  // Listen for login-result events
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    listen<LoginResultPayload>("login-result", (event) => {
+      if (disposed) return;
+      const payload = event.payload ?? {};
+
+      if (payload.status === "sending_code") {
+        setLoginStatus("logging-in");
+        return;
+      }
+
+      if (payload.success) {
+        setLoginStatus("logged-in");
+        setLoginError("");
+        setLoginObtainedAt(
+          typeof payload.obtainedAt === "string" ? payload.obtainedAt : ""
+        );
+      } else {
+        setLoginStatus("failed");
+        setLoginError(
+          typeof payload.error === "string" ? payload.error : "未知错误"
+        );
+      }
+    })
+      .then((unlistenFn) => {
+        if (disposed) {
+          unlistenFn();
+          return;
+        }
+        unlisten = unlistenFn;
+      })
+      .catch((error) => {
+        setErrorMessage(`登录事件监听失败: ${String(error)}`);
+      });
+
+    return () => {
+      disposed = true;
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  const triggerLogin = async () => {
+    const phone = account.trim();
+    if (!phone) {
+      setErrorMessage("请先填写申请人手机号");
+      return;
+    }
+    setLoginStatus("logging-in");
+    setLoginError("");
+    try {
+      await invoke("start_login", { account: phone });
+    } catch (error) {
+      setLoginStatus("failed");
+      setLoginError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const queryStatus = async (idCard: string) => {
+    if (!idCard.trim()) {
+      setErrorMessage("请先填写身份证号");
+      return;
+    }
+    if (loginStatus !== "logged-in") {
+      setErrorMessage("请先登录后再查询预约记录");
+      return;
+    }
+    setStatusLoading(true);
+    try {
+      const records = await invoke<VisitorStatusRecord[]>(
+        "query_visitor_status",
+        { idCard: idCard.trim() }
+      );
+      setStatusRecords(records);
+      setStatusModalOpen(true);
+    } catch (error) {
+      setErrorMessage(
+        `查询预约记录失败: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setStatusLoading(false);
+    }
+  };
 
   // Auto-save form state on change (debounced)
   const initialLoadDone = useRef(false);
@@ -235,7 +352,6 @@ function App() {
   useEffect(() => {
     let disposed = false;
 
-    void loadRecentHistory();
     // Load saved form state and auto-query
     invoke<FormState | null>("load_form_state")
       .then(async (saved) => {
@@ -612,7 +728,6 @@ function App() {
     } finally {
       setIsRunning(false);
       setCountdownSeconds(null);
-      await loadRecentHistory();
       await syncExistingDates(dates);
     }
   };
@@ -676,14 +791,38 @@ function App() {
           <h2>1. 申请人信息</h2>
           <label>
             手机号
-            <input
-              type="text"
-              placeholder="申请人手机号"
-              value={account}
-              disabled={isRunning}
-              onChange={(e) => setAccount(e.currentTarget.value)}
-            />
+            <div className="account-row">
+              <input
+                type="text"
+                placeholder="申请人手机号"
+                value={account}
+                disabled={isRunning}
+                onChange={(e) => setAccount(e.currentTarget.value)}
+              />
+              <button
+                type="button"
+                className={loginStatus === "logged-in" ? "btn-login-done" : ""}
+                disabled={!account.trim() || isRunning || loginStatus === "logging-in"}
+                onClick={triggerLogin}
+              >
+                {loginStatus === "logging-in"
+                  ? "登录中..."
+                  : loginStatus === "logged-in"
+                    ? "已登录"
+                    : "登录"}
+              </button>
+            </div>
           </label>
+          {loginStatus === "logged-in" && loginObtainedAt ? (
+            <p className="login-info">
+              <span className="login-status-dot login-dot-success" />
+              登录时间: {formatHistoryTime(loginObtainedAt)}
+            </p>
+          ) : null}
+          {loginStatus === "failed" && loginError ? (
+            <p className="field-error">{loginError}</p>
+          ) : null}
+          <p className="hint">填写申请单无需登录，如需查询预约状态则必须登录。</p>
         </div>
 
         <div className="block">
@@ -712,6 +851,18 @@ function App() {
                     onClick={() => queryVisitor(index)}
                   >
                     {visitor.loading ? "查询中..." : "确认"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={
+                      !visitor.idCard.trim() ||
+                      loginStatus !== "logged-in" ||
+                      statusLoading
+                    }
+                    onClick={() => queryStatus(visitor.idCard)}
+                  >
+                    {statusLoading ? "查询中..." : "查询记录"}
                   </button>
                   {visitors.length > 1 ? (
                     <button
@@ -770,7 +921,7 @@ function App() {
                     }
                     onClick={() => queryReception(index)}
                   >
-                    {reception.loading ? "查询中..." : "查询"}
+                    {reception.loading ? "查询中..." : "确认"}
                   </button>
                   {receptions.length > 1 ? (
                     <button
@@ -977,29 +1128,63 @@ function App() {
           </div>
         </div>
 
-        <div className="block">
-          <h2>8. 最近一个月申请历史（本地记录）</h2>
-          <p className="history-note">仅保存在当前设备，不会上传到服务器。</p>
-          <div className="list-box">
-            {historyRecords.length === 0 ? (
-              <p className="empty">暂无历史记录</p>
+      </aside>
+      </div>
+
+      {statusModalOpen ? (
+        <div className="modal-overlay" onClick={() => setStatusModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>预约记录</h3>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setStatusModalOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+            {statusRecords.length === 0 ? (
+              <p className="empty">暂无预约记录</p>
             ) : (
-              historyRecords.map((record) => (
-                <div
-                  key={`${record.date}-${record.submittedAt}`}
-                  className="history-row"
-                >
-                  <span>{record.date}</span>
-                  <span className="history-time">
-                    {formatHistoryTime(record.submittedAt)}
-                  </span>
-                </div>
-              ))
+              <div className="modal-table-wrap">
+                <table className="status-table">
+                  <thead>
+                    <tr>
+                      <th>单号</th>
+                      <th>访客姓名</th>
+                      <th>到访公司</th>
+                      <th>到访园区</th>
+                      <th>申请类型</th>
+                      <th>接待人</th>
+                      <th>接待人联系方式</th>
+                      <th>权限生效时间</th>
+                      <th>权限截止时间</th>
+                      <th>权限状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statusRecords.map((r) => (
+                      <tr key={r.flowNum}>
+                        <td>{r.flowNum}</td>
+                        <td>{r.visitorName}</td>
+                        <td>{r.visitCompany}</td>
+                        <td>{r.visitPark}</td>
+                        <td>{r.applyType}</td>
+                        <td>{r.rPersonName}</td>
+                        <td>{r.rPersonPhone}</td>
+                        <td>{r.dateStart}</td>
+                        <td>{r.dateEnd}</td>
+                        <td>{r.flowStatus}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
-      </aside>
-      </div>
+      ) : null}
     </main>
   );
 }

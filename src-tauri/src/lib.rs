@@ -1,13 +1,17 @@
 mod app_state;
+mod auth_client;
+mod auth_webview;
 mod batch_runner;
 mod date_mapping;
 mod form_state_store;
-mod history_store;
 mod http_common;
 mod log_store;
 mod reception_client;
+mod record_store;
 mod request_template;
+mod status_client;
 mod submit_client;
+mod token_store;
 mod visitor_client;
 
 use chrono::{NaiveDate, Utc};
@@ -16,6 +20,8 @@ use serde_json::json;
 use tauri::Emitter;
 
 use reception_client::ReceptionInfo;
+use serde::Serialize;
+use status_client::VisitorStatusRecord;
 use visitor_client::VisitorInfo;
 
 #[cfg(test)]
@@ -142,9 +148,11 @@ async fn start_batch_submit(
     for reception in &receptions {
         let mut sorted_dates = dates.clone();
         sorted_dates.sort_unstable();
-        let mut existing_keys = history_store::get_recent_history(&app_handle)?
+        let mut existing_keys = record_store::get_existing_keys(
+                &app_handle, &sorted_dates, &reception.employee_id
+            )?
             .into_iter()
-            .map(|record| format!("{}-{}", record.date, record.reception_id))
+            .map(|date| format!("{}-{}", date, reception.employee_id))
             .collect::<std::collections::HashSet<_>>();
 
         for (index, date_text) in sorted_dates.iter().enumerate() {
@@ -176,7 +184,7 @@ async fn start_batch_submit(
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
                     existing_keys.insert(key.clone());
-                    history_store::upsert_success_record(&app_handle, &date_text, &reception.employee_id)?;
+                    record_store::upsert_record(&app_handle, &date_text, &reception.employee_id)?;
 
                     let response_text = submit_result.response_text;
                     let _ = log_store::append_log(&app_handle, &json!({
@@ -255,19 +263,12 @@ fn stop_batch_submit(
 }
 
 #[tauri::command]
-fn get_recent_history(
-    app_handle: tauri::AppHandle,
-) -> Result<Vec<history_store::HistoryRecord>, String> {
-    history_store::get_recent_history(&app_handle)
-}
-
-#[tauri::command]
 fn get_existing_keys(
     app_handle: tauri::AppHandle,
     dates: Vec<String>,
     reception_id: String,
 ) -> Result<Vec<String>, String> {
-    history_store::get_existing_keys(&app_handle, &dates, &reception_id)
+    record_store::get_existing_keys(&app_handle, &dates, &reception_id)
 }
 
 #[tauri::command]
@@ -275,7 +276,7 @@ fn get_existing_dates(
     app_handle: tauri::AppHandle,
     dates: Vec<String>,
 ) -> Result<Vec<String>, String> {
-    history_store::get_existing_dates(&app_handle, &dates)
+    record_store::get_existing_dates(&app_handle, &dates)
 }
 
 #[tauri::command]
@@ -309,23 +310,99 @@ fn get_factory_info() -> std::collections::HashMap<String, String> {
     info
 }
 
+#[tauri::command]
+async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<(), String> {
+    let phone = account.trim().to_string();
+    if phone.is_empty() {
+        return Err("手机号不能为空".to_string());
+    }
+
+    let _ = app_handle.emit(
+        "login-result",
+        json!({ "success": false, "status": "sending_code" }),
+    );
+
+    let code = auth_client::send_code(&phone).await?;
+    auth_client::visitor_login(&phone, &code).await?;
+
+    auth_webview::start_login(&app_handle, phone)?;
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TokenStatus {
+    phone: String,
+    obtained_at: String,
+}
+
+#[tauri::command]
+fn get_token_status(app_handle: tauri::AppHandle) -> Result<Option<TokenStatus>, String> {
+    let data = token_store::load_token(&app_handle)?;
+    Ok(data.map(|d| TokenStatus {
+        phone: d.phone,
+        obtained_at: d.obtained_at,
+    }))
+}
+
+#[tauri::command]
+async fn check_token(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    let token_data = match token_store::load_token(&app_handle)? {
+        Some(d) => d,
+        None => return Ok(false),
+    };
+    status_client::check_token_valid(&token_data.phone, &token_data.ac_token).await
+}
+
+#[tauri::command]
+async fn query_visitor_status(
+    app_handle: tauri::AppHandle,
+    id_card: String,
+) -> Result<Vec<VisitorStatusRecord>, String> {
+    let token_data = token_store::load_token(&app_handle)?
+        .ok_or_else(|| "未登录，请先登录获取 token".to_string())?;
+
+    let (records, _response_text) = status_client::query_visitor_status(
+        &token_data.phone,
+        &id_card,
+        &token_data.ac_token,
+    )
+    .await?;
+
+    Ok(records)
+}
+
+#[tauri::command]
+fn clear_token(app_handle: tauri::AppHandle) -> Result<(), String> {
+    token_store::clear_token(&app_handle)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(app_state::AppState::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            record_store::init_db(&app.handle())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             fetch_visitor_info,
             fetch_reception_info,
             start_batch_submit,
             stop_batch_submit,
-            get_recent_history,
             get_existing_keys,
             get_existing_dates,
             load_form_state,
             save_form_state,
-            get_factory_info
+            get_factory_info,
+            start_login,
+            get_token_status,
+            check_token,
+            query_visitor_status,
+            clear_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

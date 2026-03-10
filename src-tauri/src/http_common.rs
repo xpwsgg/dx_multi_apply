@@ -10,6 +10,11 @@ pub(crate) const BX_V: &str = "2.5.11";
 pub(crate) const USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 
+pub(crate) const AUTH_API_BASE: &str =
+    "https://dingtalk.avaryholding.com:8443/dingplus/visitorConnector";
+pub(crate) const MOBILE_USER_AGENT: &str =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AliApp(DingTalk/7.6.0)";
+
 pub(crate) const COMPANY: &str = "庆鼎精密电子(淮安)有限公司";
 pub(crate) const PART: &str = "淮安第二园区";
 pub(crate) const APPLY_TYPE: &str = "一般访客";
