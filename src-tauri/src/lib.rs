@@ -285,10 +285,35 @@ fn load_form_state(
     form_state_store::load_form_state(&app_handle)
 }
 
+#[tauri::command]
+fn save_form_state(
+    app_handle: tauri::AppHandle,
+    account: String,
+    visitor_id_cards: Vec<String>,
+    reception_ids: Vec<String>,
+) -> Result<(), String> {
+    let state = form_state_store::FormState {
+        account,
+        visitor_id_cards,
+        reception_ids,
+    };
+    form_state_store::save_form_state(&app_handle, &state)
+}
+
+#[tauri::command]
+fn get_factory_info() -> std::collections::HashMap<String, String> {
+    let mut info = std::collections::HashMap::new();
+    info.insert("company".to_string(), http_common::COMPANY.to_string());
+    info.insert("part".to_string(), http_common::PART.to_string());
+    info.insert("applyType".to_string(), http_common::APPLY_TYPE.to_string());
+    info
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(app_state::AppState::new())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             fetch_visitor_info,
@@ -298,7 +323,9 @@ pub fn run() {
             get_recent_history,
             get_existing_keys,
             get_existing_dates,
-            load_form_state
+            load_form_state,
+            save_form_state,
+            get_factory_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -10,6 +10,10 @@ pub(crate) const BX_V: &str = "2.5.11";
 pub(crate) const USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 
+pub(crate) const COMPANY: &str = "庆鼎精密电子(淮安)有限公司";
+pub(crate) const PART: &str = "淮安第二园区";
+pub(crate) const APPLY_TYPE: &str = "一般访客";
+
 pub(crate) fn build_referer(account: &str) -> String {
     format!(
         "https://iw68lh.aliwork.com/o/fk_ybfk?account={}&company=%E5%BA%86%E9%BC%8E%E7%B2%BE%E5%AF%86%E7%94%B5%E5%AD%90(%E6%B7%AE%E5%AE%89)%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8&part=%E6%B7%AE%E5%AE%89%E7%AC%AC%E4%BA%8C%E5%9B%AD%E5%8C%BA&applyType=%E4%B8%80%E8%88%AC%E8%AE%BF%E5%AE%A2",

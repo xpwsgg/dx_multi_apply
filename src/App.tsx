@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { expandDateRange } from "./dateRange";
 import "./App.css";
 
@@ -160,6 +161,7 @@ function App() {
   const [processedCount, setProcessedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [logActionFeedback, setLogActionFeedback] = useState<LogActionFeedback | null>(null);
+  const [factoryInfo, setFactoryInfo] = useState<{ company: string; part: string; applyType: string } | null>(null);
 
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
@@ -199,11 +201,45 @@ function App() {
   };
 
   useEffect(() => {
+    invoke<Record<string, string>>("get_factory_info").then((info) => {
+      setFactoryInfo({
+        company: info.company,
+        part: info.part,
+        applyType: info.applyType,
+      });
+    });
+  }, []);
+
+  // Auto-save form state on change (debounced)
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (!initialLoadDone.current) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const visitorIdCards = visitors
+        .map((v) => v.idCard.trim())
+        .filter((id) => id.length > 0);
+      const receptionIds = receptions
+        .map((r) => r.employeeId.trim())
+        .filter((id) => id.length > 0);
+      invoke("save_form_state", {
+        account: account.trim(),
+        visitorIdCards,
+        receptionIds,
+      }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [account, visitors, receptions]);
+
+  useEffect(() => {
+    let disposed = false;
+
     void loadRecentHistory();
     // Load saved form state and auto-query
     invoke<FormState | null>("load_form_state")
       .then(async (saved) => {
-        if (!saved) return;
+        if (disposed || !saved) return;
         const savedAccount = saved.account || "";
         const savedReceptionIds = saved.receptionIds ?? [];
         const savedIdCards = saved.visitorIdCards ?? [];
@@ -219,6 +255,7 @@ function App() {
           setVisitors(rows);
 
           for (let i = 0; i < savedIdCards.length; i++) {
+            if (disposed) return;
             const idCard = savedIdCards[i].trim();
             if (!idCard) continue;
             try {
@@ -226,18 +263,22 @@ function App() {
                 account: savedAccount.trim(),
                 idCard,
               });
-              setVisitors((prev) =>
-                prev.map((v, idx) =>
-                  idx === i ? { ...v, loading: false, info, error: undefined } : v
-                )
-              );
+              if (!disposed) {
+                setVisitors((prev) =>
+                  prev.map((v, idx) =>
+                    idx === i ? { ...v, loading: false, info, error: undefined } : v
+                  )
+                );
+              }
             } catch (error) {
-              const msg = error instanceof Error ? error.message : String(error);
-              setVisitors((prev) =>
-                prev.map((v, idx) =>
-                  idx === i ? { ...v, loading: false, info: undefined, error: msg } : v
-                )
-              );
+              if (!disposed) {
+                const msg = error instanceof Error ? error.message : String(error);
+                setVisitors((prev) =>
+                  prev.map((v, idx) =>
+                    idx === i ? { ...v, loading: false, info: undefined, error: msg } : v
+                  )
+                );
+              }
             }
           }
         }
@@ -251,33 +292,47 @@ function App() {
           setReceptions(rows);
 
           for (let i = 0; i < savedReceptionIds.length; i++) {
+            if (disposed) return;
             const employeeId = savedReceptionIds[i].trim();
             if (!employeeId) continue;
             try {
               const info = await invoke<ReceptionInfo>("fetch_reception_info", {
                 employeeId,
               });
-              setReceptions((prev) =>
-                prev.map((r, idx) =>
-                  idx === i ? { ...r, loading: false, info, error: undefined } : r
-                )
-              );
+              if (!disposed) {
+                setReceptions((prev) =>
+                  prev.map((r, idx) =>
+                    idx === i ? { ...r, loading: false, info, error: undefined } : r
+                  )
+                );
+              }
             } catch (error) {
-              const msg = error instanceof Error ? error.message : String(error);
-              setReceptions((prev) =>
-                prev.map((r, idx) =>
-                  idx === i ? { ...r, loading: false, info: undefined, error: msg } : r
-                )
-              );
+              if (!disposed) {
+                const msg = error instanceof Error ? error.message : String(error);
+                setReceptions((prev) =>
+                  prev.map((r, idx) =>
+                    idx === i ? { ...r, loading: false, info: undefined, error: msg } : r
+                  )
+                );
+              }
             }
           }
         }
       })
       .catch((error) => {
-        setErrorMessage(
-          `加载表单状态失败: ${error instanceof Error ? error.message : String(error)}`
-        );
+        if (!disposed) {
+          setErrorMessage(
+            `加载表单状态失败: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      })
+      .finally(() => {
+        if (!disposed) {
+          initialLoadDone.current = true;
+        }
       });
+
+    return () => { disposed = true; };
   }, []);
 
   useEffect(() => {
@@ -360,14 +415,21 @@ function App() {
 
     getCurrentWindow()
       .onCloseRequested(async (event) => {
-        const hasUnfinishedTask = isRunning && processedCount < dates.length;
-        const message = hasUnfinishedTask
-          ? "当前任务未完成，确认关闭软件吗？"
-          : "确认关闭软件吗？";
-        const confirmed = window.confirm(message);
-        if (!confirmed) {
-          event.preventDefault();
+        event.preventDefault();
+
+        if (isRunning) {
+          const confirmed = await confirm("当前任务未完成，确认关闭软件吗？", {
+            title: "确认关闭软件",
+            kind: "warning",
+            okLabel: "确认关闭",
+            cancelLabel: "继续运行",
+          });
+          if (!confirmed) {
+            return;
+          }
         }
+
+        await getCurrentWindow().destroy();
       })
       .then((unlistenFn) => {
         if (disposed) {
@@ -386,7 +448,7 @@ function App() {
         unlistenClose();
       }
     };
-  }, [isRunning, processedCount, dates.length]);
+  }, [isRunning]);
 
   const queryVisitor = async (index: number) => {
     const row = visitors[index];
@@ -559,8 +621,15 @@ function App() {
     if (!isRunning) return;
     const hasUnfinishedTask = processedCount < dates.length;
     if (hasUnfinishedTask) {
-      const confirmed = window.confirm("任务未完成，确认停止任务吗？");
-      if (!confirmed) return;
+      const confirmed = await confirm("任务未完成，确认停止任务吗？", {
+        title: "确认停止任务",
+        kind: "warning",
+        okLabel: "确认停止",
+        cancelLabel: "继续运行",
+      });
+      if (!confirmed) {
+        return;
+      }
     }
     try {
       await invoke("stop_batch_submit");
@@ -592,6 +661,14 @@ function App() {
   return (
     <main className="page">
       <h1 className="title">批量入场申请</h1>
+      {factoryInfo ? (
+        <div className="factory-banner">
+          <span className="factory-company">{factoryInfo.company}</span>
+          <span className="factory-divider" />
+          <span className="factory-tag">{factoryInfo.part}</span>
+          <span className="factory-tag">{factoryInfo.applyType}</span>
+        </div>
+      ) : null}
       <div className="layout">
       <section className="panel panel-left">
 
