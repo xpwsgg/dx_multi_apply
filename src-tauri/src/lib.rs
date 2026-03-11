@@ -48,13 +48,16 @@ async fn fetch_visitor_info(
                 "responseRaw": response_text
             });
             let _ = app_handle.emit("batch-log", &log_payload);
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "fetch_visitor_info",
-                "request_summary": format!("account={account}, id_card={id_card}"),
-                "status": 200,
-                "response_body": response_text
-            }));
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "fetch_visitor_info",
+                    "request_summary": format!("account={account}, id_card={id_card}"),
+                    "status": 200,
+                    "response_body": response_text
+                }),
+            );
             Ok(info)
         }
         Err(err) => {
@@ -63,13 +66,16 @@ async fn fetch_visitor_info(
                 "reason": format!("身份证号 {id_card} 查询失败: {err}"),
             });
             let _ = app_handle.emit("batch-log", &log_payload);
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "fetch_visitor_info",
-                "request_summary": format!("account={account}, id_card={id_card}"),
-                "status": 0,
-                "response_body": err
-            }));
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "fetch_visitor_info",
+                    "request_summary": format!("account={account}, id_card={id_card}"),
+                    "status": 0,
+                    "response_body": err
+                }),
+            );
             Err(err)
         }
     }
@@ -89,13 +95,16 @@ async fn fetch_reception_info(
                 "responseRaw": response_text
             });
             let _ = app_handle.emit("batch-log", &log_payload);
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "fetch_reception_info",
-                "request_summary": format!("employee_id={employee_id}"),
-                "status": 200,
-                "response_body": response_text
-            }));
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "fetch_reception_info",
+                    "request_summary": format!("employee_id={employee_id}"),
+                    "status": 200,
+                    "response_body": response_text
+                }),
+            );
             Ok(info)
         }
         Err(err) => {
@@ -104,13 +113,16 @@ async fn fetch_reception_info(
                 "reason": format!("员工号 {employee_id} 查询失败: {err}"),
             });
             let _ = app_handle.emit("batch-log", &log_payload);
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "fetch_reception_info",
-                "request_summary": format!("employee_id={employee_id}"),
-                "status": 0,
-                "response_body": err
-            }));
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "fetch_reception_info",
+                    "request_summary": format!("employee_id={employee_id}"),
+                    "status": 0,
+                    "response_body": err
+                }),
+            );
             Err(err)
         }
     }
@@ -148,12 +160,11 @@ async fn start_batch_submit(
     for reception in &receptions {
         let mut sorted_dates = dates.clone();
         sorted_dates.sort_unstable();
-        let mut existing_keys = record_store::get_existing_keys(
-                &app_handle, &sorted_dates, &reception.employee_id
-            )?
-            .into_iter()
-            .map(|date| format!("{}-{}", date, reception.employee_id))
-            .collect::<std::collections::HashSet<_>>();
+        let mut existing_keys =
+            record_store::get_existing_keys(&app_handle, &sorted_dates, &reception.employee_id)?
+                .into_iter()
+                .map(|date| format!("{}-{}", date, reception.employee_id))
+                .collect::<std::collections::HashSet<_>>();
 
         for (index, date_text) in sorted_dates.iter().enumerate() {
             let date_text = date_text.clone();
@@ -187,18 +198,19 @@ async fn start_batch_submit(
                     record_store::upsert_record(&app_handle, &date_text, &reception.employee_id)?;
 
                     let response_text = submit_result.response_text;
-                    let _ = log_store::append_log(&app_handle, &json!({
-                        "timestamp": Utc::now().to_rfc3339(),
-                        "operation": "submit",
-                        "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
-                        "status": submit_result.status_code,
-                        "response_body": response_text
-                    }));
+                    let _ = log_store::append_log(
+                        &app_handle,
+                        &json!({
+                            "timestamp": Utc::now().to_rfc3339(),
+                            "operation": "submit",
+                            "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
+                            "status": submit_result.status_code,
+                            "response_body": response_text
+                        }),
+                    );
 
-                    let has_pending_after_current = sorted_dates
-                        .iter()
-                        .skip(index + 1)
-                        .any(|next_date| {
+                    let has_pending_after_current =
+                        sorted_dates.iter().skip(index + 1).any(|next_date| {
                             let next_key = format!("{}-{}", next_date, reception.employee_id);
                             !existing_keys.contains(&next_key)
                         });
@@ -224,13 +236,16 @@ async fn start_batch_submit(
                 }
                 Err(err) => {
                     let reason = err.message.clone();
-                    let _ = log_store::append_log(&app_handle, &json!({
-                        "timestamp": Utc::now().to_rfc3339(),
-                        "operation": "submit",
-                        "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
-                        "status": 0,
-                        "response_body": err.response_raw
-                    }));
+                    let _ = log_store::append_log(
+                        &app_handle,
+                        &json!({
+                            "timestamp": Utc::now().to_rfc3339(),
+                            "operation": "submit",
+                            "request_summary": format!("date={}, reception={}", date_text, reception.employee_id),
+                            "status": 0,
+                            "response_body": err.response_raw
+                        }),
+                    );
                     let _ = app_handle.emit(
                         "batch-log",
                         json!({
@@ -323,9 +338,7 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
     );
 
     let code = auth_client::send_code(&phone).await?;
-    auth_client::visitor_login(&phone, &code).await?;
-
-    auth_webview::start_login(&app_handle, phone)?;
+    auth_webview::start_login(&app_handle, phone, code)?;
 
     Ok(())
 }
@@ -335,6 +348,35 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
 struct TokenStatus {
     phone: String,
     obtained_at: String,
+}
+
+#[tauri::command]
+fn import_token(
+    app_handle: tauri::AppHandle,
+    account: String,
+    ac_token: String,
+) -> Result<TokenStatus, String> {
+    let phone = account.trim().to_string();
+    if phone.is_empty() {
+        return Err("手机号不能为空".to_string());
+    }
+
+    let token = ac_token.trim().to_string();
+    if token.len() < 64 || !token.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("acToken 格式无效，请粘贴浏览器里完整的 64 位十六进制值".to_string());
+    }
+
+    let token_data = token_store::TokenData {
+        ac_token: token,
+        phone: phone.clone(),
+        obtained_at: Utc::now().to_rfc3339(),
+    };
+    token_store::save_token(&app_handle, &token_data)?;
+
+    Ok(TokenStatus {
+        phone,
+        obtained_at: token_data.obtained_at,
+    })
 }
 
 #[tauri::command]
@@ -363,12 +405,9 @@ async fn query_visitor_status(
     let token_data = token_store::load_token(&app_handle)?
         .ok_or_else(|| "未登录，请先登录获取 token".to_string())?;
 
-    let (records, _response_text) = status_client::query_visitor_status(
-        &token_data.phone,
-        &id_card,
-        &token_data.ac_token,
-    )
-    .await?;
+    let (records, _response_text) =
+        status_client::query_visitor_status(&token_data.phone, &id_card, &token_data.ac_token)
+            .await?;
 
     Ok(records)
 }
@@ -399,6 +438,7 @@ pub fn run() {
             save_form_state,
             get_factory_info,
             start_login,
+            import_token,
             get_token_status,
             check_token,
             query_visitor_status,

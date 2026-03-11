@@ -72,6 +72,11 @@ type LoginResultPayload = {
   status?: string;
 };
 
+type TokenStatusPayload = {
+  phone: string;
+  obtainedAt: string;
+};
+
 type VisitorStatusRecord = {
   flowNum: string;
   visitorName: string;
@@ -182,6 +187,7 @@ function App() {
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
   const [loginError, setLoginError] = useState("");
   const [loginObtainedAt, setLoginObtainedAt] = useState("");
+  const [manualToken, setManualToken] = useState("");
   const [statusRecords, setStatusRecords] = useState<VisitorStatusRecord[]>([]);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -223,7 +229,7 @@ function App() {
       });
     });
     // Check for existing token on startup and validate it
-    invoke<{ phone: string; obtainedAt: string } | null>("get_token_status").then(
+    invoke<TokenStatusPayload | null>("get_token_status").then(
       async (status) => {
         if (!status) return;
         setLoginObtainedAt(status.obtainedAt);
@@ -251,6 +257,11 @@ function App() {
       const payload = event.payload ?? {};
 
       if (payload.status === "sending_code") {
+        setLoginStatus("logging-in");
+        return;
+      }
+
+      if (payload.status === "progress") {
         setLoginStatus("logging-in");
         return;
       }
@@ -295,6 +306,35 @@ function App() {
     setLoginError("");
     try {
       await invoke("start_login", { account: phone });
+    } catch (error) {
+      setLoginStatus("failed");
+      setLoginError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const importManualToken = async () => {
+    const phone = account.trim();
+    const token = manualToken.trim();
+    if (!phone) {
+      setErrorMessage("请先填写申请人手机号");
+      return;
+    }
+    if (!token) {
+      setErrorMessage("请先粘贴浏览器里的 acToken");
+      return;
+    }
+
+    setLoginStatus("logging-in");
+    setLoginError("");
+    try {
+      const result = await invoke<TokenStatusPayload>("import_token", {
+        account: phone,
+        acToken: token,
+      });
+      setLoginStatus("logged-in");
+      setLoginError("");
+      setLoginObtainedAt(result.obtainedAt);
+      setManualToken("");
     } catch (error) {
       setLoginStatus("failed");
       setLoginError(error instanceof Error ? error.message : String(error));
@@ -822,6 +862,31 @@ function App() {
           {loginStatus === "failed" && loginError ? (
             <p className="field-error">{loginError}</p>
           ) : null}
+          <label className="manual-token-label">
+            手动导入 acToken
+            <div className="manual-token-row">
+              <input
+                type="password"
+                placeholder="粘贴浏览器 localStorage 里的 acToken"
+                value={manualToken}
+                disabled={isRunning || loginStatus === "logging-in"}
+                autoComplete="off"
+                onChange={(e) => setManualToken(e.currentTarget.value)}
+              />
+              <button
+                type="button"
+                disabled={
+                  isRunning ||
+                  loginStatus === "logging-in" ||
+                  !account.trim() ||
+                  !manualToken.trim()
+                }
+                onClick={importManualToken}
+              >
+                导入 Token
+              </button>
+            </div>
+          </label>
           <p className="hint">填写申请单无需登录，如需查询预约状态则必须登录。</p>
         </div>
 

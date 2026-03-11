@@ -144,6 +144,23 @@ body {
   min-width: 0;
 }
 
+.manual-token-label {
+  display: block;
+  margin-top: 10px;
+}
+
+.manual-token-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.manual-token-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 .btn-login-done {
   background: var(--success);
 }
