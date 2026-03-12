@@ -1,6 +1,6 @@
 mod app_state;
 mod auth_client;
-mod auth_webview;
+
 mod batch_runner;
 mod date_mapping;
 mod form_state_store;
@@ -338,7 +338,29 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
     );
 
     let code = auth_client::send_code(&phone).await?;
-    auth_webview::start_login(&app_handle, phone, code)?;
+
+    let _ = app_handle.emit(
+        "login-result",
+        json!({ "success": false, "status": "progress", "message": "验证码已获取，正在登录..." }),
+    );
+
+    let ac_token = auth_client::visitor_login(&phone, &code).await?;
+
+    let token_data = token_store::TokenData {
+        ac_token,
+        phone: phone.clone(),
+        obtained_at: Utc::now().to_rfc3339(),
+    };
+    token_store::save_token(&app_handle, &token_data)?;
+
+    let _ = app_handle.emit(
+        "login-result",
+        json!({
+            "success": true,
+            "phone": phone,
+            "obtainedAt": token_data.obtained_at
+        }),
+    );
 
     Ok(())
 }
