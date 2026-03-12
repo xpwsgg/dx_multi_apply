@@ -49,21 +49,27 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ---- Page Shell ---- */
 
 .page {
-  min-height: 100vh;
+  height: 100vh;
   padding: 20px 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .title {
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto 16px;
   font-size: 20px;
   font-weight: 700;
@@ -87,7 +93,10 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -95,6 +104,7 @@ body {
 
 .factory-banner {
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto 16px;
   display: flex;
   align-items: center;
@@ -105,6 +115,7 @@ body {
   color: #fff;
   font-size: 14px;
   box-shadow: 0 2px 8px rgba(212, 32, 39, 0.2);
+  flex-shrink: 0;
 }
 
 .factory-company {
@@ -198,14 +209,33 @@ body {
   background: var(--surface);
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-height: 0;
+}
+
+.panel-left {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .panel-right {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-right > .block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-right .block-header {
   position: sticky;
-  top: 20px;
-  align-self: start;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
 }
 
 /* ---- Blocks ---- */
@@ -286,6 +316,7 @@ body {
   border-radius: var(--radius-sm);
   font-size: 12px;
   line-height: 1.5;
+  flex-shrink: 0;
 }
 
 .log-action-feedback-success {
@@ -578,8 +609,11 @@ button:disabled {
 }
 
 .log-box {
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   font-size: 13px;
+  overscroll-behavior: contain;
 }
 
 .empty {
@@ -691,6 +725,7 @@ button:disabled {
   font-family: "SF Mono", "Menlo", "Monaco", monospace;
   max-height: 120px;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-light);
 }
 

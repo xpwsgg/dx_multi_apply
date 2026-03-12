@@ -191,6 +191,7 @@ function App() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
 
+  const startupLoginPhoneRef = useRef<string>("");
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
   const allVisitorsReady = visitors.length > 0 && visitors.every((v) => v.info && !v.loading);
@@ -220,30 +221,76 @@ function App() {
   };
 
   useEffect(() => {
-    invoke<Record<string, string>>("get_factory_info").then((info) => {
-      setFactoryInfo({
-        company: info.company,
-        part: info.part,
-        applyType: info.applyType,
+    invoke<Record<string, string>>("get_factory_info")
+      .then((info) => {
+        setFactoryInfo({
+          company: info.company,
+          part: info.part,
+          applyType: info.applyType,
+        });
+      })
+      .catch((error) => {
+        setErrorMessage(`加载厂区信息失败: ${String(error)}`);
       });
-    });
-    // Check for existing token on startup and validate it
-    invoke<TokenStatusPayload | null>("get_token_status").then(
-      async (status) => {
-        if (!status) return;
-        setLoginObtainedAt(status.obtainedAt);
-        setLoginStatus("logging-in");
-        try {
-          const valid = await invoke<boolean>("check_token");
-          setLoginStatus(valid ? "logged-in" : "idle");
-          if (!valid) {
-            setLoginError("登录已失效，请重新登录");
-          }
-        } catch {
-          setLoginStatus("idle");
+
+    let disposed = false;
+
+    const restoreLoginState = async () => {
+      try {
+        const status = await invoke<TokenStatusPayload | null>("get_token_status");
+        if (disposed || !status) {
+          return;
         }
+
+        const savedPhone = status.phone.trim();
+        startupLoginPhoneRef.current = savedPhone;
+        setAccount(savedPhone);
+        setLoginObtainedAt(status.obtainedAt);
+        setLoginError("");
+        setLoginStatus("logging-in");
+
+        const valid = await invoke<boolean>("check_token");
+        if (disposed) {
+          return;
+        }
+
+        if (valid) {
+          setLoginStatus("logged-in");
+          return;
+        }
+
+        await invoke("clear_token");
+        if (disposed) {
+          return;
+        }
+
+        setLoginStatus("idle");
+        setLoginObtainedAt("");
+        setLoginError("登录已失效，请重新登录");
+      } catch (error) {
+        if (disposed) {
+          return;
+        }
+
+        try {
+          await invoke("clear_token");
+        } catch {
+          // 忽略清理失败，保留前端可继续操作
+        }
+
+        setLoginStatus("idle");
+        setLoginObtainedAt("");
+        setLoginError(
+          error instanceof Error ? error.message : "登录状态校验失败，请重新登录"
+        );
       }
-    );
+    };
+
+    void restoreLoginState();
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   // Listen for login-result events
@@ -268,6 +315,10 @@ function App() {
       if (payload.success) {
         setLoginStatus("logged-in");
         setLoginError("");
+        if (typeof payload.phone === "string") {
+          setAccount(payload.phone);
+          startupLoginPhoneRef.current = payload.phone;
+        }
         setLoginObtainedAt(
           typeof payload.obtainedAt === "string" ? payload.obtainedAt : ""
         );
@@ -308,6 +359,22 @@ function App() {
     } catch (error) {
       setLoginStatus("failed");
       setLoginError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const switchLoginAccount = async () => {
+    setLoginError("");
+    setLoginObtainedAt("");
+    setLoginStatus("idle");
+    startupLoginPhoneRef.current = "";
+    setAccount("");
+
+    try {
+      await invoke("clear_token");
+    } catch (error) {
+      setErrorMessage(
+        `清理登录状态失败: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   };
 
@@ -370,7 +437,9 @@ function App() {
         const savedReceptionIds = saved.receptionIds ?? [];
         const savedIdCards = saved.visitorIdCards ?? [];
 
-        if (savedAccount) setAccount(savedAccount);
+        if (savedAccount && !startupLoginPhoneRef.current) {
+          setAccount(savedAccount);
+        }
 
         // Auto-query visitors
         if (savedAccount && savedIdCards.length > 0) {
@@ -806,10 +875,10 @@ function App() {
                 type="text"
                 placeholder="申请人手机号"
                 value={account}
-                disabled={isRunning}
+                disabled={isRunning || loginStatus === "logged-in"}
                 onChange={(e) => {
                   setAccount(e.currentTarget.value);
-                  if (loginStatus === "logged-in" || loginStatus === "failed") {
+                  if (loginStatus === "failed") {
                     setLoginStatus("idle");
                     setLoginError("");
                     setLoginObtainedAt("");
@@ -820,12 +889,14 @@ function App() {
                 type="button"
                 className={loginStatus === "logged-in" ? "btn-login-done" : ""}
                 disabled={!account.trim() || isRunning || loginStatus === "logging-in"}
-                onClick={triggerLogin}
+                onClick={
+                  loginStatus === "logged-in" ? switchLoginAccount : triggerLogin
+                }
               >
                 {loginStatus === "logging-in"
                   ? "登录中..."
                   : loginStatus === "logged-in"
-                    ? "已登录"
+                    ? "切换"
                     : "登录"}
               </button>
             </div>
