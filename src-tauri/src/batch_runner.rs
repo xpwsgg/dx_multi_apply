@@ -5,10 +5,12 @@ use std::sync::{
     Arc,
 };
 
+#[cfg(test)]
 pub trait BatchSubmitter {
     fn submit_date(&self, date: NaiveDate) -> Result<(), String>;
 }
 
+#[cfg(test)]
 pub async fn run_batch_dates(
     mut dates: Vec<NaiveDate>,
     submitter: &impl BatchSubmitter,

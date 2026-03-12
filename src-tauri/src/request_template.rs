@@ -155,6 +155,7 @@ pub fn build_payload(
 }
 
 /// Backward-compatible: builds payload using the hardcoded template data (only updates date fields).
+#[cfg(test)]
 pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
     let mut payload: Value = serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
     let fields = payload
@@ -199,6 +200,7 @@ pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
     Ok(payload)
 }
 
+#[cfg(test)]
 pub fn extract_field_value(payload: &Value, label: &str) -> Result<String, String> {
     let fields = payload
         .as_array()

@@ -6,7 +6,9 @@ use crate::http_common::{
     SCHEMA_VERSION, USER_AGENT,
 };
 use crate::reception_client::ReceptionInfo;
-use crate::request_template::{build_payload, build_payload_for_date};
+use crate::request_template::build_payload;
+#[cfg(test)]
+use crate::request_template::build_payload_for_date;
 use crate::visitor_client::VisitorInfo;
 
 const SUBMIT_URL: &str = "https://iw68lh.aliwork.com/o/HW9663A19D6M1QDL6D7GNAO1L2ZC2NBXQHOXL3";
@@ -23,15 +25,18 @@ pub struct SubmitError {
     pub response_raw: Option<String>,
 }
 
+#[cfg(test)]
 pub trait HttpClient {
     fn post_form(&self, _date_text: &str, _encoded_value: &str) -> (u16, String);
 }
 
+#[cfg(test)]
 pub struct FakeHttp {
     status_code: u16,
     body: String,
 }
 
+#[cfg(test)]
 impl FakeHttp {
     pub fn new(status_code: u16, body: &str) -> Self {
         Self {
@@ -41,6 +46,7 @@ impl FakeHttp {
     }
 }
 
+#[cfg(test)]
 impl HttpClient for FakeHttp {
     fn post_form(&self, _date_text: &str, _encoded_value: &str) -> (u16, String) {
         (self.status_code, self.body.clone())
@@ -71,6 +77,7 @@ fn validate_business_success(status_code: u16, response_text: &str) -> Result<()
 }
 
 /// Test-only: uses the hardcoded template data (build_payload_for_date).
+#[cfg(test)]
 pub async fn submit_once_with_client(
     client: &impl HttpClient,
     date_text: &str,

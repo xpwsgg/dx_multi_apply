@@ -1,6 +1,7 @@
 mod app_state;
 mod auth_client;
 
+#[cfg(test)]
 mod batch_runner;
 mod date_mapping;
 mod form_state_store;
