@@ -2,15 +2,14 @@ use chrono::{NaiveDate, Utc};
 use serde_json::Value;
 
 use crate::http_common::{
-    ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN, SCHEMA_VERSION,
-    USER_AGENT, build_referer,
+    build_referer, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
+    SCHEMA_VERSION, USER_AGENT,
 };
 use crate::reception_client::ReceptionInfo;
 use crate::request_template::{build_payload, build_payload_for_date};
 use crate::visitor_client::VisitorInfo;
 
-const SUBMIT_URL: &str =
-    "https://iw68lh.aliwork.com/o/HW9663A19D6M1QDL6D7GNAO1L2ZC2NBXQHOXL3";
+const SUBMIT_URL: &str = "https://iw68lh.aliwork.com/o/HW9663A19D6M1QDL6D7GNAO1L2ZC2NBXQHOXL3";
 
 #[derive(Debug)]
 pub struct SubmitResult {

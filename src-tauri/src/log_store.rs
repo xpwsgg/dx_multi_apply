@@ -13,12 +13,8 @@ fn log_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|err| format!("failed to resolve app data dir: {err}"))?;
 
     let log_dir = app_data_dir.join(LOG_DIR_NAME);
-    fs::create_dir_all(&log_dir).map_err(|err| {
-        format!(
-            "failed to create log dir {}: {err}",
-            log_dir.display()
-        )
-    })?;
+    fs::create_dir_all(&log_dir)
+        .map_err(|err| format!("failed to create log dir {}: {err}", log_dir.display()))?;
 
     Ok(log_dir.join(LOG_FILE_NAME))
 }

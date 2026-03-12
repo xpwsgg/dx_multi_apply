@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const SEARCH_URL: &str =
-    "https://dingtalk.avaryholding.com:8443/dingplus/searchFormData";
+const SEARCH_URL: &str = "https://dingtalk.avaryholding.com:8443/dingplus/searchFormData";
 const RECEPTION_FORM_UUID: &str = "FORM-B965E22437E1415BBBBA33011BF20FB54VP8";
 const RECEPTION_APP_TYPE: &str = "APP_GRVPTEOQ6D4B7FLZFYNJ";
 const RECEPTION_SYSTEM_TOKEN: &str = "DC666GC1PN6LT8C7C64FD9N62P2E3F9V1SFWLKQ61";
@@ -55,9 +54,7 @@ fn extract_reception_from_response(
         .to_string();
 
     if name.is_empty() {
-        return Err(format!(
-            "员工 {employee_id} 的接待人姓名为空"
-        ));
+        return Err(format!("员工 {employee_id} 的接待人姓名为空"));
     }
 
     Ok(ReceptionInfo {
@@ -69,10 +66,7 @@ fn extract_reception_from_response(
 }
 
 pub async fn fetch_reception_info(employee_id: &str) -> Result<(ReceptionInfo, String), String> {
-    let json_inner = format!(
-        "{{\"employeeField_m3o6fym4\": [\"{}\"]}}",
-        employee_id
-    );
+    let json_inner = format!("{{\"employeeField_m3o6fym4\": [\"{}\"]}}", employee_id);
 
     let request_body = serde_json::json!({
         "formUUid": RECEPTION_FORM_UUID,
@@ -112,13 +106,10 @@ pub async fn fetch_reception_info(employee_id: &str) -> Result<(ReceptionInfo, S
         .map_err(|e| format!("读取响应失败: {e}"))?;
 
     if !(200..=299).contains(&status) {
-        return Err(format!(
-            "获取接待人信息: 状态码 {status}, 响应体: {text}"
-        ));
+        return Err(format!("获取接待人信息: 状态码 {status}, 响应体: {text}"));
     }
 
-    let body: Value =
-        serde_json::from_str(&text).map_err(|e| format!("解析 JSON 失败: {e}"))?;
+    let body: Value = serde_json::from_str(&text).map_err(|e| format!("解析 JSON 失败: {e}"))?;
 
     let info = extract_reception_from_response(employee_id, &body)?;
     Ok((info, text))

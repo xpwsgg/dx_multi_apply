@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::http_common::{
-    ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN, USER_AGENT,
-    build_referer,
+    build_referer, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
+    USER_AGENT,
 };
 
-const FETCH_URL: &str =
-    "https://iw68lh.aliwork.com/o/HW9663A19D6M1QDL6D7GNAO1L2ZC26DXQHOXL7";
+const FETCH_URL: &str = "https://iw68lh.aliwork.com/o/HW9663A19D6M1QDL6D7GNAO1L2ZC26DXQHOXL7";
 
 const FETCH_DATA_TEMPLATE: &str = include_str!("visitor_fetch_data.json");
 const BINDING_FORMULAS: &str = include_str!("binding_formulas.json");
@@ -24,8 +23,7 @@ pub struct VisitorInfo {
 }
 
 fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
-    let mut data: Value =
-        serde_json::from_str(FETCH_DATA_TEMPLATE).map_err(|e| e.to_string())?;
+    let mut data: Value = serde_json::from_str(FETCH_DATA_TEMPLATE).map_err(|e| e.to_string())?;
     let fields = data
         .as_array_mut()
         .ok_or_else(|| "获取数据模板不是数组".to_string())?;
@@ -72,8 +70,8 @@ fn parse_json_string_array(arr: &Value) -> Result<Value, String> {
     let mut result = Vec::new();
     for item in items {
         if let Some(s) = item.as_str() {
-            let obj: Value = serde_json::from_str(s)
-                .map_err(|e| format!("解析媒体JSON失败: {e}"))?;
+            let obj: Value =
+                serde_json::from_str(s).map_err(|e| format!("解析媒体JSON失败: {e}"))?;
             result.push(obj);
         } else {
             result.push(item.clone());
@@ -220,9 +218,7 @@ pub async fn fetch_visitor_info(
         .map_err(|e| format!("failed to read response: {e}"))?;
 
     if !(200..=299).contains(&status) {
-        return Err(format!(
-            "fetch visitor info: status {status}, body: {text}"
-        ));
+        return Err(format!("fetch visitor info: status {status}, body: {text}"));
     }
 
     let body: Value =

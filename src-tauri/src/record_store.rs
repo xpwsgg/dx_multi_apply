@@ -24,7 +24,8 @@ fn db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn open_db(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
     let path = db_path(app_handle)?;
-    Connection::open(&path).map_err(|err| format!("failed to open database {}: {err}", path.display()))
+    Connection::open(&path)
+        .map_err(|err| format!("failed to open database {}: {err}", path.display()))
 }
 
 pub fn init_db(app_handle: &tauri::AppHandle) -> Result<(), String> {
@@ -68,9 +69,8 @@ pub fn get_existing_dates(
 
     let conn = open_db(app_handle)?;
     let placeholders = dates.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT DISTINCT date FROM submission_records WHERE date IN ({placeholders})"
-    );
+    let sql =
+        format!("SELECT DISTINCT date FROM submission_records WHERE date IN ({placeholders})");
 
     let mut stmt = conn
         .prepare(&sql)
@@ -118,7 +118,8 @@ pub fn get_existing_keys(
     for date in dates {
         param_values.push(Box::new(date.clone()));
     }
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
 
     let rows = stmt
         .query_map(&*param_refs, |row| row.get::<_, String>(0))

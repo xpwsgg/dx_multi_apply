@@ -44,12 +44,8 @@ pub fn save_token(app_handle: &tauri::AppHandle, data: &TokenData) -> Result<(),
     })?;
 
     if path.exists() {
-        fs::remove_file(&path).map_err(|err| {
-            format!(
-                "failed to replace token file {}: {err}",
-                path.display()
-            )
-        })?;
+        fs::remove_file(&path)
+            .map_err(|err| format!("failed to replace token file {}: {err}", path.display()))?;
     }
 
     fs::rename(&temp_path, &path).map_err(|err| {
@@ -87,9 +83,8 @@ pub fn clear_token(app_handle: &tauri::AppHandle) -> Result<(), String> {
     let path = token_file_path(app_handle)?;
 
     if path.exists() {
-        fs::remove_file(&path).map_err(|err| {
-            format!("failed to remove token file {}: {err}", path.display())
-        })?;
+        fs::remove_file(&path)
+            .map_err(|err| format!("failed to remove token file {}: {err}", path.display()))?;
     }
 
     Ok(())

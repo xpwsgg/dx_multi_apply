@@ -90,8 +90,7 @@ pub fn build_payload(
     visitors: &[VisitorInfo],
     reception: &ReceptionInfo,
 ) -> Result<Value, String> {
-    let mut payload: Value =
-        serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
+    let mut payload: Value = serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
     let fields = payload
         .as_array_mut()
         .ok_or_else(|| "模板数据不是数组".to_string())?;
@@ -157,8 +156,7 @@ pub fn build_payload(
 
 /// Backward-compatible: builds payload using the hardcoded template data (only updates date fields).
 pub fn build_payload_for_date(date: NaiveDate) -> Result<Value, String> {
-    let mut payload: Value =
-        serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
+    let mut payload: Value = serde_json::from_str(VALUE_TEMPLATE).map_err(|err| err.to_string())?;
     let fields = payload
         .as_array_mut()
         .ok_or_else(|| "模板数据不是数组".to_string())?;
