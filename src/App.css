@@ -222,20 +222,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.panel-right > .block {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.panel-right .block-header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface);
+  gap: 0;
+  padding: 0;
 }
 
 /* ---- Blocks ---- */
@@ -847,6 +835,174 @@ button:disabled {
 
 .status-table td {
   color: var(--text);
+}
+
+/* ---- Submission Panel (Right) ---- */
+
+.submission-summary {
+  padding: 14px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.submission-summary p {
+  margin: 0 0 2px;
+}
+
+.submission-summary p:last-child {
+  margin-bottom: 0;
+}
+
+.submission-count {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.submission-count strong {
+  color: var(--brand);
+  font-size: 14px;
+}
+
+.submission-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.submission-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.submission-table th,
+.submission-table td {
+  padding: 7px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.submission-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.submission-table tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+.submission-row-submitting {
+  background: #FFFBEB;
+}
+
+.submission-row-success {
+  background: var(--success-bg);
+}
+
+.submission-row-failed {
+  background: var(--error-bg);
+}
+
+/* ---- Status Badges ---- */
+
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-pending {
+  color: var(--text-tertiary);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.badge-submitting {
+  color: #92400E;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+.badge-success {
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+}
+
+.badge-skipped {
+  color: var(--info-text);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+}
+
+.badge-failed {
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+}
+
+.badge-stopped {
+  color: var(--text-secondary);
+  background: #F3F4F6;
+  border: 1px solid #D1D5DB;
+}
+
+/* ---- Submission Actions Bar ---- */
+
+.submission-actions {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.submission-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.submission-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.submission-progress {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Log Modal Body ---- */
+
+.modal-log-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px;
+  font-size: 13px;
 }
 
 /* ---- Responsive ---- */

@@ -57,6 +57,17 @@ type FormState = {
   receptionIds: string[];
 };
 
+type SubmissionStatus = "pending" | "submitting" | "success" | "skipped" | "failed" | "stopped";
+
+type SubmissionItem = {
+  date: string;
+  weekday: string;
+  receptionName: string;
+  receptionDept: string;
+  status: SubmissionStatus;
+  existing: boolean;
+};
+
 type LogActionFeedback = {
   type: "success" | "error";
   message: string;
@@ -205,11 +216,43 @@ function App() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
 
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
+  const submissionPointerRef = useRef(0);
+
   const startupLoginPhoneRef = useRef<string>("");
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
 
   const allVisitorsReady = visitors.length > 0 && visitors.every((v) => v.info && !v.loading);
   const allReceptionsReady = receptions.length > 0 && receptions.every((r) => r.info && !r.loading);
+
+  // 自动生成申请列表：dates × receptions 笛卡尔积
+  const confirmedReceptions = useMemo(
+    () => receptions.filter((r) => r.info).map((r) => r.info!),
+    [receptions]
+  );
+
+  useEffect(() => {
+    if (isRunning) return; // 提交中不重新生成
+    if (dates.length === 0 || confirmedReceptions.length === 0) {
+      setSubmissionItems([]);
+      return;
+    }
+    const items: SubmissionItem[] = [];
+    for (const date of dates) {
+      for (const rec of confirmedReceptions) {
+        items.push({
+          date,
+          weekday: weekdayLabel(date),
+          receptionName: rec.name,
+          receptionDept: rec.department,
+          status: "pending",
+          existing: existingDateSet.has(date),
+        });
+      }
+    }
+    setSubmissionItems(items);
+  }, [dates, confirmedReceptions, existingDateSet, isRunning]);
   const canSubmit =
     account.trim().length > 0 &&
     allVisitorsReady &&
@@ -554,10 +597,31 @@ function App() {
 
       if (item.result === "success" || item.result === "skipped") {
         setProcessedCount((prev) => prev + 1);
+        // 更新对应申请行状态
+        setSubmissionItems((prev) => {
+          const idx = submissionPointerRef.current;
+          if (idx < prev.length) {
+            submissionPointerRef.current = idx + 1;
+            return prev.map((si, i) =>
+              i === idx ? { ...si, status: item.result as SubmissionStatus } : si
+            );
+          }
+          return prev;
+        });
       }
 
       if (typeof item.waitSeconds === "number" && item.waitSeconds > 0) {
         setCountdownSeconds(item.waitSeconds);
+        // 标记当前行为 submitting
+        setSubmissionItems((prev) => {
+          const idx = submissionPointerRef.current;
+          if (idx < prev.length) {
+            return prev.map((si, i) =>
+              i === idx ? { ...si, status: "submitting" } : si
+            );
+          }
+          return prev;
+        });
       } else if (
         item.result === "success" ||
         item.result === "skipped" ||
@@ -567,7 +631,30 @@ function App() {
         setCountdownSeconds(null);
       }
 
-      if (item.result === "failed" || item.result === "stopped") {
+      if (item.result === "failed") {
+        // 单条失败，更新对应行
+        setSubmissionItems((prev) => {
+          const idx = submissionPointerRef.current;
+          if (idx < prev.length) {
+            submissionPointerRef.current = idx + 1;
+            return prev.map((si, i) =>
+              i === idx ? { ...si, status: "failed" } : si
+            );
+          }
+          return prev;
+        });
+        setIsRunning(false);
+      }
+
+      if (item.result === "stopped") {
+        // 所有 pending 改为 stopped
+        setSubmissionItems((prev) =>
+          prev.map((si) =>
+            si.status === "pending" || si.status === "submitting"
+              ? { ...si, status: "stopped" }
+              : si
+          )
+        );
         setIsRunning(false);
       }
     })
@@ -779,15 +866,6 @@ function App() {
     }
   }, [startDate, endDate]);
 
-  const removeDate = (target: string) => {
-    if (isRunning) return;
-    setDates((prev) => {
-      const next = prev.filter((item) => item !== target);
-      setExistingDates((existing) => existing.filter((item) => item !== target));
-      return next;
-    });
-  };
-
   const startSubmit = async () => {
     if (!canSubmit) return;
 
@@ -810,6 +888,17 @@ function App() {
       setLogs([]);
       setProcessedCount(0);
       setCountdownSeconds(null);
+      submissionPointerRef.current = 0;
+      // 重置所有行为 pending
+      setSubmissionItems((prev) =>
+        prev.map((si) => ({ ...si, status: "pending" as const }))
+      );
+      // 标记第一行为 submitting
+      setSubmissionItems((prev) =>
+        prev.length > 0
+          ? prev.map((si, i) => (i === 0 ? { ...si, status: "submitting" as const } : si))
+          : prev
+      );
       setIsRunning(true);
       await invoke("start_batch_submit", {
         account: account.trim(),
@@ -1074,6 +1163,7 @@ function App() {
               <input
                 type="date"
                 value={startDate}
+                min={new Date().toISOString().split("T")[0]}
                 disabled={isRunning}
                 onChange={(e) => setStartDate(e.currentTarget.value)}
               />
@@ -1090,180 +1180,199 @@ function App() {
           </div>
         </div>
 
-        <div className="block">
-          <h2>5. 待提交日期</h2>
-          {(allVisitorsReady || allReceptionsReady) && dates.length > 0 ? (
-            <div className="submit-summary">
-              {allVisitorsReady ? (
-                <p>
-                  <strong>访客：</strong>
-                  {visitors.filter((v) => v.info).map((v) => v.info!.name).join("、")}
-                </p>
-              ) : null}
-              {allReceptionsReady ? (
-                <p>
-                  <strong>接待人：</strong>
-                  {receptions.filter((r) => r.info).map((r) => `${r.info!.name}(${r.info!.department})`).join("、")}
-                </p>
-              ) : null}
-              <p className="hint" style={{ marginTop: 4 }}>
-                共 {dates.length} 天 × {receptions.filter((r) => r.info).length || 1} 接待人 = {dates.length * (receptions.filter((r) => r.info).length || 1)} 条申请
-              </p>
-            </div>
-          ) : null}
-          <div className="list-box">
-            {dates.length === 0 ? <p className="empty">暂无日期</p> : null}
-            {dates.map((date) => (
-              <div key={date} className="date-row">
-                <div className="date-main">
-                  <span>{date}</span>
-                  <span className="weekday-label">{weekdayLabel(date)}</span>
-                  {existingDateSet.has(date) ? (
-                    <span className="badge-existing">已存在</span>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeDate(date)}
-                  disabled={isRunning}
-                >
-                  删除
-                </button>
-              </div>
-            ))}
-          </div>
-          {existingDates.length > 0 ? (
-            <p className="hint">
-              检测到 {existingDates.length} 条日期已有申请记录，提交时将自动跳过。
+        {errorMessage ? <p className="error">{errorMessage}</p> : null}
+      </section>
+
+      <aside className="panel panel-right">
+        {/* 顶部汇总 */}
+        <div className="submission-summary">
+          {allVisitorsReady && dates.length > 0 ? (
+            <p>
+              <strong>访客：</strong>
+              {visitors.filter((v) => v.info).map((v) => v.info!.name).join("、")}
             </p>
           ) : null}
+          {allReceptionsReady && dates.length > 0 ? (
+            <p>
+              <strong>接待人：</strong>
+              {confirmedReceptions.map((r) => `${r.name}(${r.department})`).join("、")}
+            </p>
+          ) : null}
+          <p className="submission-count">
+            {dates.length} 天 &times; {confirmedReceptions.length || 0} 接待人 ={" "}
+            <strong>{submissionItems.length}</strong> 条申请
+          </p>
         </div>
 
-        <div className="block action-row">
-          <h2>6. 批量执行</h2>
-          <div className="actions">
-            <button
-              type="button"
-              onClick={startSubmit}
-              disabled={!canSubmit}
-            >
-              开始提交
-            </button>
-            <button type="button" onClick={stopSubmit} disabled={!isRunning}>
-              停止提交
-            </button>
-          </div>
+        {/* 中部申请列表 */}
+        <div className="submission-table-wrap">
+          {submissionItems.length === 0 ? (
+            <p className="empty">请先选择日期并确认接待人</p>
+          ) : (
+            <table className="submission-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>日期</th>
+                  <th>星期</th>
+                  <th>接待人</th>
+                  <th>部门</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissionItems.map((item, idx) => (
+                  <tr key={`${item.date}-${item.receptionName}-${idx}`} className={`submission-row-${item.status}`}>
+                    <td>{idx + 1}</td>
+                    <td>{item.date}</td>
+                    <td>{item.weekday}</td>
+                    <td>{item.receptionName}</td>
+                    <td>{item.receptionDept}</td>
+                    <td>
+                      <span className={`badge-status badge-${item.status}`}>
+                        {item.status === "pending" && (item.existing ? "已存在" : "待提交")}
+                        {item.status === "submitting" && "提交中"}
+                        {item.status === "success" && "已提交"}
+                        {item.status === "skipped" && "已跳过"}
+                        {item.status === "failed" && "失败"}
+                        {item.status === "stopped" && "已停止"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* 底部操作栏 */}
+        <div className="submission-actions">
           {!allVisitorsReady || !allReceptionsReady ? (
-            <p className="hint">
-              请先完成所有访客查询和接待人查询后再提交。
+            <p className="hint" style={{ margin: 0 }}>
+              请先完成所有访客和接待人查询后再提交。
             </p>
           ) : null}
-          {isRunning ? (
-            <p className="countdown">
+          {isRunning && (
+            <p className="countdown" style={{ margin: 0 }}>
               {countdownSeconds === null
                 ? "正在提交中，等待服务端返回..."
                 : countdownSeconds > 0
                   ? `下一次请求倒计时：${formatCountdown(countdownSeconds)}`
                   : "即将提交下一条..."}
             </p>
-          ) : null}
-        </div>
-
-        {errorMessage ? <p className="error">{errorMessage}</p> : null}
-      </section>
-
-      <aside className="panel panel-right">
-        <div className="block">
-          <div className="block-header">
-            <h2>7. 日志</h2>
-            <div className="icon-actions">
-              <button
-                type="button"
-                className="icon-action-btn"
-                onClick={copyAllLogs}
-                disabled={logs.length === 0}
-                title="复制全部日志"
-                aria-label="复制全部日志"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
+          )}
+          <div className="submission-action-row">
+            <div className="actions">
+              <button type="button" onClick={startSubmit} disabled={!canSubmit}>
+                开始提交
               </button>
+              <button type="button" onClick={stopSubmit} disabled={!isRunning}>
+                停止提交
+              </button>
+            </div>
+            <div className="submission-meta">
+              {submissionItems.length > 0 && (
+                <span className="submission-progress">
+                  {processedCount}/{submissionItems.length}
+                </span>
+              )}
               <button
                 type="button"
-                className="icon-action-btn icon-action-btn-danger"
-                onClick={clearLogs}
-                disabled={logs.length === 0}
-                title="清空日志"
-                aria-label="清空日志"
+                className="btn-secondary"
+                onClick={() => setLogModalOpen(true)}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
+                查看日志
               </button>
             </div>
           </div>
-          {logActionFeedback ? (
-            <p className={`log-action-feedback log-action-feedback-${logActionFeedback.type}`}>
-              {logActionFeedback.message}
-            </p>
-          ) : null}
-          <div className="log-box">
-            {logs.length === 0 ? <p className="empty">暂无日志</p> : null}
-            {[...logs].reverse().map((log, rIndex) => {
-              const index = logs.length - 1 - rIndex;
-              return (
-              <article
-                key={`${log.date ?? "none"}-${log.result}-${index}`}
-                className="log-item"
-              >
-                <p>
-                  [{index + 1}]{" "}
-                  {log.result === "visitor_query"
-                    ? "[访客查询]"
-                    : log.result === "reception_query"
-                      ? "[接待人查询]"
-                      : log.result === "status_query"
-                        ? "[预约记录查询]"
-                        : log.result === "status_query_failed"
-                          ? "[预约记录查询失败]"
-                          : log.date ?? "-"}{" "}
-                  | {log.result}
-                  {typeof log.waitSeconds === "number"
-                    ? ` | 等待 ${log.waitSeconds}s`
-                    : ""}
-                </p>
-                {log.reason ? <p>原因: {log.reason}</p> : null}
-                {log.responseRaw ? <pre>{log.responseRaw}</pre> : null}
-              </article>
-              );
-            })}
-          </div>
         </div>
-
       </aside>
       </div>
+
+      {/* 日志弹窗 */}
+      {logModalOpen ? (
+        <div className="modal-overlay" onClick={() => setLogModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>提交日志</h3>
+              <div className="icon-actions">
+                <button
+                  type="button"
+                  className="icon-action-btn"
+                  onClick={copyAllLogs}
+                  disabled={logs.length === 0}
+                  title="复制全部日志"
+                  aria-label="复制全部日志"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="icon-action-btn icon-action-btn-danger"
+                  onClick={clearLogs}
+                  disabled={logs.length === 0}
+                  title="清空日志"
+                  aria-label="清空日志"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setLogModalOpen(false)}
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+            {logActionFeedback ? (
+              <p className={`log-action-feedback log-action-feedback-${logActionFeedback.type}`} style={{ margin: "0 20px" }}>
+                {logActionFeedback.message}
+              </p>
+            ) : null}
+            <div className="modal-log-body">
+              {logs.length === 0 ? <p className="empty">暂无日志</p> : null}
+              {[...logs].reverse().map((log, rIndex) => {
+                const index = logs.length - 1 - rIndex;
+                return (
+                  <article
+                    key={`${log.date ?? "none"}-${log.result}-${index}`}
+                    className="log-item"
+                  >
+                    <p>
+                      [{index + 1}]{" "}
+                      {log.result === "visitor_query"
+                        ? "[访客查询]"
+                        : log.result === "reception_query"
+                          ? "[接待人查询]"
+                          : log.result === "status_query"
+                            ? "[预约记录查询]"
+                            : log.result === "status_query_failed"
+                              ? "[预约记录查询失败]"
+                              : log.date ?? "-"}{" "}
+                      | {log.result}
+                      {typeof log.waitSeconds === "number"
+                        ? ` | 等待 ${log.waitSeconds}s`
+                        : ""}
+                    </p>
+                    {log.reason ? <p>原因: {log.reason}</p> : null}
+                    {log.responseRaw ? <pre>{log.responseRaw}</pre> : null}
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {statusModalOpen ? (
         <div className="modal-overlay" onClick={() => setStatusModalOpen(false)}>
