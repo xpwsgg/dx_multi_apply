@@ -65,8 +65,17 @@ jobs:
             ### 下载说明
             - **macOS (Apple Silicon)**: 下载 `.dmg` (aarch64) 文件
             - **macOS (Intel)**: 下载 `.dmg` (x64) 文件
-            - **Windows**: 下载 `.msi` 或 `.exe` 安装包
+            - **Windows (安装版)**: 下载 `.msi` 或 `.exe` 安装包
+            - **Windows (免安装版)**: 下载 `BatchApply-portable-x64.exe`，双击即可运行
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
           npmScript: ""
+
+      - name: Upload portable exe (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          cp src-tauri/target/x86_64-pc-windows-msvc/release/BatchApply.exe BatchApply-portable-x64.exe
+          gh release upload ${{ github.ref_name }} BatchApply-portable-x64.exe --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
