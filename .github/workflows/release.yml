@@ -74,8 +74,16 @@ jobs:
 
       - name: Upload portable exe (Windows)
         if: matrix.platform == 'windows-latest'
+        shell: pwsh
         run: |
-          cp src-tauri/target/x86_64-pc-windows-msvc/release/BatchApply.exe BatchApply-portable-x64.exe
+          $releaseDir = "src-tauri/target/x86_64-pc-windows-msvc/release"
+          $exe = Get-ChildItem "$releaseDir/usersxiaodocumentscodevisit-batch-submitter.exe" -ErrorAction SilentlyContinue
+          if (-not $exe) {
+            Write-Host "Exe not found by package name, searching release dir..."
+            $exe = Get-ChildItem "$releaseDir/*.exe" -File | Where-Object { $_.Name -notmatch '(build-script|deps)' } | Select-Object -First 1
+          }
+          Write-Host "Found: $($exe.FullName)"
+          Copy-Item $exe.FullName "BatchApply-portable-x64.exe"
           gh release upload ${{ github.ref_name }} BatchApply-portable-x64.exe --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
