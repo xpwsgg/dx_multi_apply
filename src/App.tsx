@@ -80,6 +80,7 @@ type TokenStatusPayload = {
 type VisitorStatusRecord = {
   flowNum: string;
   visitorName: string;
+  visitorPhone: string;
   visitCompany: string;
   visitPark: string;
   applyType: string;
@@ -88,6 +89,7 @@ type VisitorStatusRecord = {
   dateStart: string;
   dateEnd: string;
   flowStatus: string;
+  createTime: string;
 };
 
 function normalizeLog(payload: BatchLogPayload): BatchLogItem {
@@ -127,7 +129,11 @@ function serializeLogs(logs: BatchLogItem[]): string {
           ? "[访客查询]"
           : log.result === "reception_query"
             ? "[接待人查询]"
-            : log.date ?? "-";
+            : log.result === "status_query"
+              ? "[预约记录查询]"
+              : log.result === "status_query_failed"
+                ? "[预约记录查询失败]"
+                : log.date ?? "-";
       const wait =
         typeof log.waitSeconds === "number" ? ` | 等待 ${log.waitSeconds}s` : "";
       const lines = [`[${index + 1}] ${target} | ${log.result}${wait}`];
@@ -1192,7 +1198,9 @@ function App() {
           ) : null}
           <div className="log-box">
             {logs.length === 0 ? <p className="empty">暂无日志</p> : null}
-            {logs.map((log, index) => (
+            {[...logs].reverse().map((log, rIndex) => {
+              const index = logs.length - 1 - rIndex;
+              return (
               <article
                 key={`${log.date ?? "none"}-${log.result}-${index}`}
                 className="log-item"
@@ -1203,7 +1211,11 @@ function App() {
                     ? "[访客查询]"
                     : log.result === "reception_query"
                       ? "[接待人查询]"
-                      : log.date ?? "-"}{" "}
+                      : log.result === "status_query"
+                        ? "[预约记录查询]"
+                        : log.result === "status_query_failed"
+                          ? "[预约记录查询失败]"
+                          : log.date ?? "-"}{" "}
                   | {log.result}
                   {typeof log.waitSeconds === "number"
                     ? ` | 等待 ${log.waitSeconds}s`
@@ -1212,7 +1224,8 @@ function App() {
                 {log.reason ? <p>原因: {log.reason}</p> : null}
                 {log.responseRaw ? <pre>{log.responseRaw}</pre> : null}
               </article>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -1241,6 +1254,7 @@ function App() {
                     <tr>
                       <th>单号</th>
                       <th>访客姓名</th>
+                      <th>访客电话</th>
                       <th>到访公司</th>
                       <th>到访园区</th>
                       <th>申请类型</th>
@@ -1249,6 +1263,7 @@ function App() {
                       <th>权限生效时间</th>
                       <th>权限截止时间</th>
                       <th>权限状态</th>
+                      <th>申请时间</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1256,6 +1271,7 @@ function App() {
                       <tr key={r.flowNum}>
                         <td>{r.flowNum}</td>
                         <td>{r.visitorName}</td>
+                        <td>{r.visitorPhone}</td>
                         <td>{r.visitCompany}</td>
                         <td>{r.visitPark}</td>
                         <td>{r.applyType}</td>
@@ -1264,6 +1280,7 @@ function App() {
                         <td>{r.dateStart}</td>
                         <td>{r.dateEnd}</td>
                         <td>{r.flowStatus}</td>
+                        <td>{r.createTime}</td>
                       </tr>
                     ))}
                   </tbody>

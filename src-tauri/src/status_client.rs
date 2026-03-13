@@ -8,6 +8,7 @@ use crate::http_common::{AUTH_API_BASE, MOBILE_USER_AGENT, ORIGIN};
 pub struct VisitorStatusRecord {
     pub flow_num: String,
     pub visitor_name: String,
+    pub visitor_phone: String,
     pub visit_company: String,
     pub visit_park: String,
     pub apply_type: String,
@@ -16,6 +17,30 @@ pub struct VisitorStatusRecord {
     pub date_start: String,
     pub date_end: String,
     pub flow_status: String,
+    pub create_time: String,
+}
+
+fn timestamp_to_date(ts_str: &str) -> String {
+    if let Ok(ms) = ts_str.parse::<i64>() {
+        let secs = ms / 1000;
+        if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
+            return dt.format("%Y-%m-%d").to_string();
+        }
+    }
+    ts_str.to_string()
+}
+
+fn flow_status_text(code: &str) -> String {
+    match code {
+        "1" => "审核中".to_string(),
+        "2" => "已通过".to_string(),
+        "3" => "已拒绝".to_string(),
+        "4" => "已撤销".to_string(),
+        "5" => "已过期".to_string(),
+        "6" => "权限已生效".to_string(),
+        "7" => "权限已失效".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// Check if a saved acToken is still valid by calling visitorStatus.
@@ -118,14 +143,16 @@ pub async fn query_visitor_status(
             Some(VisitorStatusRecord {
                 flow_num,
                 visitor_name: str_field(item, "visitorName"),
-                visit_company: str_field(item, "visitCompany"),
-                visit_park: str_field(item, "visitPark"),
-                apply_type: str_field(item, "applyType"),
+                visitor_phone: str_field(item, "visitorPhone"),
+                visit_company: str_field(item, "visitCompanyName"),
+                visit_park: str_field(item, "gardenName"),
+                apply_type: str_field(item, "visitorType"),
                 r_person_name: str_field(item, "rPersonName"),
                 r_person_phone: str_field(item, "rPersonPhone"),
-                date_start: str_field(item, "dateStart"),
-                date_end: str_field(item, "dateEnd"),
-                flow_status: str_field(item, "flowStatus"),
+                date_start: timestamp_to_date(&str_field(item, "dateStart")),
+                date_end: timestamp_to_date(&str_field(item, "dateEnd")),
+                flow_status: flow_status_text(&str_field(item, "flowStatus")),
+                create_time: str_field(item, "createTime"),
             })
         })
         .collect();

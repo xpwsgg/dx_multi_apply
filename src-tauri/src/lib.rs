@@ -428,11 +428,48 @@ async fn query_visitor_status(
     let token_data = token_store::load_token(&app_handle)?
         .ok_or_else(|| "未登录，请先登录获取 token".to_string())?;
 
-    let (records, _response_text) =
-        status_client::query_visitor_status(&token_data.phone, &id_card, &token_data.ac_token)
-            .await?;
-
-    Ok(records)
+    let timestamp = Utc::now().to_rfc3339();
+    match status_client::query_visitor_status(&token_data.phone, &id_card, &token_data.ac_token)
+        .await
+    {
+        Ok((records, response_text)) => {
+            let log_payload = json!({
+                "result": "status_query",
+                "reason": format!("身份证号 {} | 共 {} 条记录", id_card, records.len()),
+                "responseRaw": response_text
+            });
+            let _ = app_handle.emit("batch-log", &log_payload);
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "query_visitor_status",
+                    "request_summary": format!("id_card={id_card}"),
+                    "status": 200,
+                    "record_count": records.len(),
+                    "response_body": response_text
+                }),
+            );
+            Ok(records)
+        }
+        Err(e) => {
+            let log_payload = json!({
+                "result": "status_query_failed",
+                "reason": format!("身份证号 {} | {}", id_card, e),
+            });
+            let _ = app_handle.emit("batch-log", &log_payload);
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "query_visitor_status",
+                    "request_summary": format!("id_card={id_card}"),
+                    "error": e
+                }),
+            );
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
