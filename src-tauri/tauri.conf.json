@@ -14,7 +14,8 @@
       {
         "title": "批量申请",
         "width": 1280,
-        "height": 800
+        "height": 800,
+        "theme": "Light"
       }
     ],
     "security": {

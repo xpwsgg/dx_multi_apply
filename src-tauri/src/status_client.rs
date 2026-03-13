@@ -70,9 +70,12 @@ pub async fn check_token_valid(phone: &str, ac_token: &str) -> Result<bool, Stri
         .map_err(|e| format!("failed to read token check response: {e}"))?;
 
     let json: Value = serde_json::from_str(&text).unwrap_or_default();
-    let code = json.get("code").and_then(Value::as_i64).unwrap_or(0);
+    let code = json.get("code").and_then(Value::as_i64);
 
-    Ok(code != 401)
+    match code {
+        Some(200) => Ok(true),
+        _ => Ok(false),
+    }
 }
 
 pub async fn query_visitor_status(

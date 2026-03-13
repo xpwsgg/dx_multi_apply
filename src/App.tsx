@@ -610,6 +610,11 @@ function App() {
     };
   }, [logActionFeedback]);
 
+  const isRunningRef = useRef(isRunning);
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
   useEffect(() => {
     let disposed = false;
     let unlistenClose: (() => void) | undefined;
@@ -618,7 +623,7 @@ function App() {
       .onCloseRequested(async (event) => {
         event.preventDefault();
 
-        if (isRunning) {
+        if (isRunningRef.current) {
           const confirmed = await confirm("当前任务未完成，确认关闭软件吗？", {
             title: "确认关闭软件",
             kind: "warning",
@@ -649,7 +654,7 @@ function App() {
         unlistenClose();
       }
     };
-  }, [isRunning]);
+  }, []);
 
   const queryVisitor = async (index: number) => {
     const row = visitors[index];
@@ -807,7 +812,7 @@ function App() {
       window.alert("任务已完成");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("batch stopped manually")) {
+      if (!message.includes("批量提交已手动停止")) {
         setErrorMessage(message);
       }
     } finally {
@@ -819,7 +824,7 @@ function App() {
 
   const stopSubmit = async () => {
     if (!isRunning) return;
-    const hasUnfinishedTask = processedCount < dates.length;
+    const hasUnfinishedTask = processedCount < dates.length * receptions.length;
     if (hasUnfinishedTask) {
       const confirmed = await confirm("任务未完成，确认停止任务吗？", {
         title: "确认停止任务",

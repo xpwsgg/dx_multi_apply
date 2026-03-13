@@ -139,7 +139,7 @@ async fn start_batch_submit(
     dates: Vec<String>,
 ) -> Result<(), String> {
     app_state::validate_dates(&dates)?;
-    app_state::reset_stop(&state);
+    app_state::try_start(&state)?;
 
     if visitors.is_empty() {
         return Err("至少需要一个访客".to_string());
@@ -175,6 +175,7 @@ async fn start_batch_submit(
                     "batch-log",
                     json!({ "date": date_text, "result": "stopped", "reason": "manual stop" }),
                 );
+                app_state::finish(&state);
                 return Err("批量提交已手动停止".to_string());
             }
 
@@ -256,12 +257,14 @@ async fn start_batch_submit(
                             "responseRaw": err.response_raw
                         }),
                     );
+                    app_state::finish(&state);
                     return Err(format!("接待人 {}: {}", reception.name, reason));
                 }
             }
         }
     }
 
+    app_state::finish(&state);
     Ok(())
 }
 
