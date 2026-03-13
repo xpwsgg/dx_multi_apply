@@ -113,6 +113,14 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}:${seconds}`;
 }
 
+const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
+
+function weekdayLabel(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  return WEEKDAY_NAMES[d.getDay()];
+}
+
 function formatHistoryTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -1084,12 +1092,32 @@ function App() {
 
         <div className="block">
           <h2>5. 待提交日期</h2>
+          {(allVisitorsReady || allReceptionsReady) && dates.length > 0 ? (
+            <div className="submit-summary">
+              {allVisitorsReady ? (
+                <p>
+                  <strong>访客：</strong>
+                  {visitors.filter((v) => v.info).map((v) => v.info!.name).join("、")}
+                </p>
+              ) : null}
+              {allReceptionsReady ? (
+                <p>
+                  <strong>接待人：</strong>
+                  {receptions.filter((r) => r.info).map((r) => `${r.info!.name}(${r.info!.department})`).join("、")}
+                </p>
+              ) : null}
+              <p className="hint" style={{ marginTop: 4 }}>
+                共 {dates.length} 天 × {receptions.filter((r) => r.info).length || 1} 接待人 = {dates.length * (receptions.filter((r) => r.info).length || 1)} 条申请
+              </p>
+            </div>
+          ) : null}
           <div className="list-box">
             {dates.length === 0 ? <p className="empty">暂无日期</p> : null}
             {dates.map((date) => (
               <div key={date} className="date-row">
                 <div className="date-main">
                   <span>{date}</span>
+                  <span className="weekday-label">{weekdayLabel(date)}</span>
                   {existingDateSet.has(date) ? (
                     <span className="badge-existing">已存在</span>
                   ) : null}
