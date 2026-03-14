@@ -44,7 +44,8 @@ fn flow_status_text(code: &str) -> String {
 }
 
 /// Check if a saved acToken is still valid by calling visitorStatus.
-/// Returns true if valid, false if expired (code 401).
+/// Returns Ok(true) if valid, Ok(false) if definitively expired/rejected,
+/// Err if network or server error (token should be preserved).
 pub async fn check_token_valid(phone: &str, ac_token: &str) -> Result<bool, String> {
     let url = format!("{AUTH_API_BASE}/visitorStatus");
     let body = serde_json::json!({
@@ -62,19 +63,29 @@ pub async fn check_token_valid(phone: &str, ac_token: &str) -> Result<bool, Stri
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("token check request failed: {e}"))?;
+        .map_err(|e| format!("网络请求失败，无法验证登录状态: {e}"))?;
 
+    let status = response.status().as_u16();
     let text = response
         .text()
         .await
-        .map_err(|e| format!("failed to read token check response: {e}"))?;
+        .map_err(|e| format!("读取响应失败: {e}"))?;
+
+    // 服务端错误（5xx）视为临时故障，不应清除 token
+    if status >= 500 {
+        return Err(format!("服务端异常({status})，稍后重试"));
+    }
 
     let json: Value = serde_json::from_str(&text).unwrap_or_default();
     let code = json.get("code").and_then(Value::as_i64);
 
     match code {
         Some(200) => Ok(true),
-        _ => Ok(false),
+        // 401 表示 token 已失效
+        Some(401) => Ok(false),
+        // 其他 code（如 500 参数校验错误）说明认证已通过，token 有效
+        Some(_) => Ok(true),
+        None => Err(format!("服务端返回异常，无法判断登录状态: {text}")),
     }
 }
 

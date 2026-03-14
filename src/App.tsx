@@ -152,7 +152,19 @@ function serializeLogs(logs: BatchLogItem[]): string {
               ? "[预约记录查询]"
               : log.result === "status_query_failed"
                 ? "[预约记录查询失败]"
-                : log.date ?? "-";
+                : log.result === "check_token"
+                  ? "[登录校验]"
+                  : log.result === "check_token_failed"
+                    ? "[登录校验失败]"
+                    : log.result === "login_send_code"
+                      ? "[发送验证码]"
+                      : log.result === "login_send_code_failed"
+                        ? "[发送验证码失败]"
+                        : log.result === "login_visitor_login"
+                          ? "[登录]"
+                          : log.result === "login_visitor_login_failed"
+                            ? "[登录失败]"
+                            : log.date ?? "-";
       const wait =
         typeof log.waitSeconds === "number" ? ` | 等待 ${log.waitSeconds}s` : "";
       const lines = [`[${index + 1}] ${target} | ${log.result}${wait}`];
@@ -290,7 +302,10 @@ function App() {
       .catch((error) => {
         setErrorMessage(`加载厂区信息失败: ${String(error)}`);
       });
+  }, []);
 
+  // 启动时恢复登录状态，直接写入 logs 状态确保日志可见
+  useEffect(() => {
     let disposed = false;
 
     const restoreLoginState = async () => {
@@ -312,6 +327,13 @@ function App() {
           return;
         }
 
+        setLogs((prev) => [...prev, {
+          result: "check_token",
+          reason: valid
+            ? `手机号 ${savedPhone} 登录状态有效`
+            : `手机号 ${savedPhone} 登录已失效`,
+        }]);
+
         if (valid) {
           setLoginStatus("logged-in");
           return;
@@ -330,16 +352,16 @@ function App() {
           return;
         }
 
-        try {
-          await invoke("clear_token");
-        } catch {
-          // 忽略清理失败，保留前端可继续操作
-        }
+        const msg = error instanceof Error ? error.message : "登录状态校验失败";
+        setLogs((prev) => [...prev, {
+          result: "check_token_failed",
+          reason: msg,
+        }]);
 
-        setLoginStatus("idle");
-        setLoginObtainedAt("");
+        // 网络或服务端异常，保留 token 不清除，允许用户稍后重试
+        setLoginStatus("logged-in");
         setLoginError(
-          error instanceof Error ? error.message : "登录状态校验失败，请重新登录"
+          error instanceof Error ? error.message : "登录状态校验失败，已保留登录信息"
         );
       }
     };

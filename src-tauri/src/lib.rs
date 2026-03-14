@@ -341,14 +341,70 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
         json!({ "success": false, "status": "sending_code" }),
     );
 
-    let code = auth_client::send_code(&phone).await?;
+    let timestamp = Utc::now().to_rfc3339();
+    let code = match auth_client::send_code(&phone).await {
+        Ok(c) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "login_send_code",
+                "reason": format!("手机号 {phone} 验证码获取成功")
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "send_code",
+                "request_summary": format!("phone={phone}"),
+                "status": 200
+            }));
+            c
+        }
+        Err(e) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "login_send_code_failed",
+                "reason": format!("手机号 {phone} | {e}")
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "send_code",
+                "request_summary": format!("phone={phone}"),
+                "error": e
+            }));
+            return Err(e);
+        }
+    };
 
     let _ = app_handle.emit(
         "login-result",
         json!({ "success": false, "status": "progress", "message": "验证码已获取，正在登录..." }),
     );
 
-    let ac_token = auth_client::visitor_login(&phone, &code).await?;
+    let timestamp = Utc::now().to_rfc3339();
+    let ac_token = match auth_client::visitor_login(&phone, &code).await {
+        Ok(token) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "login_visitor_login",
+                "reason": format!("手机号 {phone} 登录成功")
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "visitor_login",
+                "request_summary": format!("phone={phone}"),
+                "status": 200
+            }));
+            token
+        }
+        Err(e) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "login_visitor_login_failed",
+                "reason": format!("手机号 {phone} | {e}")
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "visitor_login",
+                "request_summary": format!("phone={phone}"),
+                "error": e
+            }));
+            return Err(e);
+        }
+    };
 
     let token_data = token_store::TokenData {
         ac_token,
@@ -420,7 +476,41 @@ async fn check_token(app_handle: tauri::AppHandle) -> Result<bool, String> {
         Some(d) => d,
         None => return Ok(false),
     };
-    status_client::check_token_valid(&token_data.phone, &token_data.ac_token).await
+    let timestamp = Utc::now().to_rfc3339();
+    let phone = &token_data.phone;
+    match status_client::check_token_valid(phone, &token_data.ac_token).await {
+        Ok(valid) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "check_token",
+                "reason": if valid {
+                    format!("手机号 {phone} 登录状态有效")
+                } else {
+                    format!("手机号 {phone} 登录已失效")
+                }
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "check_token",
+                "request_summary": format!("phone={phone}"),
+                "status": 200,
+                "valid": valid
+            }));
+            Ok(valid)
+        }
+        Err(e) => {
+            let _ = app_handle.emit("batch-log", json!({
+                "result": "check_token_failed",
+                "reason": format!("手机号 {phone} | {e}")
+            }));
+            let _ = log_store::append_log(&app_handle, &json!({
+                "timestamp": timestamp,
+                "operation": "check_token",
+                "request_summary": format!("phone={phone}"),
+                "error": e
+            }));
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
