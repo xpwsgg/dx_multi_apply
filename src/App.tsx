@@ -217,6 +217,7 @@ function App() {
   const [statusLoading, setStatusLoading] = useState(false);
 
   const [logModalOpen, setLogModalOpen] = useState(false);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
   const submissionPointerRef = useRef(0);
 
@@ -906,7 +907,7 @@ function App() {
         receptions: confirmedReceptions,
         dates,
       });
-      window.alert("任务已完成");
+      setCompletionModalOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes("批量提交已手动停止")) {
@@ -1340,6 +1341,33 @@ function App() {
         </div>
       </aside>
       </div>
+
+      {/* 任务完成弹窗 */}
+      {completionModalOpen ? (() => {
+        const successCount = submissionItems.filter((i) => i.status === "success").length;
+        const skippedCount = submissionItems.filter((i) => i.status === "skipped").length;
+        const failedCount = submissionItems.filter((i) => i.status === "failed").length;
+        return (
+          <div className="modal-overlay" onClick={() => setCompletionModalOpen(false)}>
+            <div className="completion-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="completion-icon">✓</div>
+              <h3 className="completion-title">任务已完成</h3>
+              <div className="completion-stats">
+                {successCount > 0 && <span className="stat-item stat-success">提交成功 {successCount}</span>}
+                {skippedCount > 0 && <span className="stat-item stat-skipped">已跳过 {skippedCount}</span>}
+                {failedCount > 0 && <span className="stat-item stat-failed">失败 {failedCount}</span>}
+              </div>
+              <button
+                type="button"
+                className="btn-primary completion-btn"
+                onClick={() => setCompletionModalOpen(false)}
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        );
+      })() : null}
 
       {/* 日志弹窗 */}
       {logModalOpen ? (

@@ -1014,6 +1014,69 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- Completion Modal ---- */
+
+.completion-modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 360px;
+  width: 100%;
+  padding: 32px 24px 24px;
+  text-align: center;
+}
+
+.completion-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 28px;
+  line-height: 56px;
+}
+
+.completion-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.completion-stats {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stat-success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.stat-skipped {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.stat-failed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.completion-btn {
+  min-width: 120px;
+}
+
 /* ---- Log Modal Body ---- */
 
 .modal-log-body {
