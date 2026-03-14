@@ -940,6 +940,52 @@ function App() {
     }
   };
 
+  const clearForm = async () => {
+    const confirmed = await confirm("确认清空所有表单数据吗？清空后无法恢复。", {
+      title: "确认清除表单",
+      kind: "warning",
+      okLabel: "确认清除",
+      cancelLabel: "取消",
+    });
+    if (!confirmed) return;
+
+    // 清空表单字段
+    setAccount("");
+    setVisitors([{ idCard: "", loading: false }]);
+    setReceptions([{ employeeId: "", loading: false }]);
+    setStartDate("");
+    setEndDate("");
+    setDates([]);
+    setExistingDates([]);
+    setSubmissionItems([]);
+    setProcessedCount(0);
+    setCountdownSeconds(null);
+    setErrorMessage(undefined);
+    setLogs([]);
+
+    // 重置登录状态
+    setLoginStatus("idle");
+    setLoginError("");
+    setLoginObtainedAt("");
+    startupLoginPhoneRef.current = "";
+    try {
+      await invoke("clear_token");
+    } catch {
+      // 忽略清理失败
+    }
+
+    // 立即保存空状态，确保关闭后重开也是空的
+    try {
+      await invoke("save_form_state", {
+        account: "",
+        visitorIdCards: [],
+        receptionIds: [],
+      });
+    } catch {
+      // 忽略保存失败
+    }
+  };
+
   const clearLogs = () => {
     setLogs([]);
     setLogActionFeedback({ type: "success", message: "日志已清空" });
@@ -1263,11 +1309,14 @@ function App() {
           )}
           <div className="submission-action-row">
             <div className="actions">
-              <button type="button" onClick={startSubmit} disabled={!canSubmit}>
+              <button type="button" className="btn-start" onClick={startSubmit} disabled={!canSubmit}>
                 开始提交
               </button>
-              <button type="button" onClick={stopSubmit} disabled={!isRunning}>
+              <button type="button" className="btn-stop" onClick={stopSubmit} disabled={!isRunning}>
                 停止提交
+              </button>
+              <button type="button" className="btn-clear" onClick={clearForm} disabled={isRunning}>
+                清除表单
               </button>
             </div>
             <div className="submission-meta">

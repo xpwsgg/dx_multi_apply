@@ -693,13 +693,33 @@ button:disabled {
   font-weight: 600;
 }
 
-.actions button:last-child {
+.btn-start {
+  background: var(--success);
+  color: #fff;
+}
+
+.btn-start:hover:enabled {
+  background: #279040;
+  box-shadow: 0 2px 8px rgba(48, 161, 78, 0.25);
+}
+
+.btn-stop {
+  background: var(--brand);
+  color: #fff;
+}
+
+.btn-stop:hover:enabled {
+  background: var(--brand-dark);
+  box-shadow: 0 2px 8px rgba(212, 32, 39, 0.25);
+}
+
+.btn-clear {
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border);
 }
 
-.actions button:last-child:hover:enabled {
+.btn-clear:hover:enabled {
   background: var(--surface-alt);
   border-color: #ccc;
   box-shadow: none;
