@@ -327,13 +327,6 @@ function App() {
           return;
         }
 
-        setLogs((prev) => [...prev, {
-          result: "check_token",
-          reason: valid
-            ? `手机号 ${savedPhone} 登录状态有效`
-            : `手机号 ${savedPhone} 登录已失效`,
-        }]);
-
         if (valid) {
           setLoginStatus("logged-in");
           return;
@@ -351,12 +344,6 @@ function App() {
         if (disposed) {
           return;
         }
-
-        const msg = error instanceof Error ? error.message : "登录状态校验失败";
-        setLogs((prev) => [...prev, {
-          result: "check_token_failed",
-          reason: msg,
-        }]);
 
         // 网络或服务端异常，保留 token 不清除，允许用户稍后重试
         setLoginStatus("logged-in");
