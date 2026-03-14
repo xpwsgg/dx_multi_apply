@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::http_common::{AUTH_API_BASE, MOBILE_USER_AGENT, ORIGIN};
+use crate::http_common::{auth_client, AUTH_API_BASE, MOBILE_USER_AGENT, ORIGIN};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +53,7 @@ pub async fn check_token_valid(phone: &str, ac_token: &str) -> Result<bool, Stri
         "acToken": ac_token
     });
 
-    let response = reqwest::Client::new()
+    let response = auth_client()
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json, text/json")
@@ -90,7 +90,7 @@ pub async fn query_visitor_status(
         "acToken": ac_token
     });
 
-    let response = reqwest::Client::new()
+    let response = auth_client()
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json, text/json")

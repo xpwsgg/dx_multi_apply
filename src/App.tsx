@@ -962,6 +962,9 @@ function App() {
     setCountdownSeconds(null);
     setErrorMessage(undefined);
     setLogs([]);
+    setStatusRecords([]);
+    setLogActionFeedback(null);
+    submissionPointerRef.current = 0;
 
     // 重置登录状态
     setLoginStatus("idle");

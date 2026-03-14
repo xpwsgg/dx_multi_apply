@@ -2,7 +2,7 @@ use chrono::{NaiveDate, Utc};
 use serde_json::Value;
 
 use crate::http_common::{
-    build_referer, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
+    build_referer, yida_client, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
     SCHEMA_VERSION, USER_AGENT,
 };
 use crate::reception_client::ReceptionInfo;
@@ -132,7 +132,7 @@ pub async fn submit_once(
     let stamp = Utc::now().timestamp_millis().to_string();
     let referer = build_referer(account);
 
-    let response = reqwest::Client::new()
+    let response = yida_client()
         .post(SUBMIT_URL)
         .query(&[
             ("_api", "nattyFetch"),

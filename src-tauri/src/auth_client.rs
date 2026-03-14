@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::http_common::{AUTH_API_BASE, MOBILE_USER_AGENT};
+use crate::http_common::{auth_client, AUTH_API_BASE, MOBILE_USER_AGENT};
 
 pub async fn send_code(phone: &str) -> Result<String, String> {
     let url = format!("{AUTH_API_BASE}/sendCode");
@@ -10,7 +10,7 @@ pub async fn send_code(phone: &str) -> Result<String, String> {
         "region": ""
     });
 
-    let response = reqwest::Client::new()
+    let response = auth_client()
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json, text/json")
@@ -62,7 +62,7 @@ pub async fn visitor_login(phone: &str, code: &str) -> Result<String, String> {
         "code": code
     });
 
-    let response = reqwest::Client::new()
+    let response = auth_client()
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json, text/json")

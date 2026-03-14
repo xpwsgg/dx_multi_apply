@@ -15,6 +15,26 @@ pub(crate) const AUTH_API_BASE: &str =
 pub(crate) const MOBILE_USER_AGENT: &str =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AliApp(DingTalk/7.6.0)";
 
+use std::time::Duration;
+
+/// 全局复用的 HTTP 客户端（宜搭平台请求），带超时设置
+pub(crate) fn yida_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
+/// 全局复用的 HTTP 客户端（认证 API 请求），带超时设置
+pub(crate) fn auth_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
 pub(crate) const COMPANY: &str = "庆鼎精密电子(淮安)有限公司";
 pub(crate) const PART: &str = "淮安第二园区";
 pub(crate) const APPLY_TYPE: &str = "一般访客";

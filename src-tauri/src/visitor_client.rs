@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::http_common::{
-    build_referer, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
+    build_referer, yida_client, ACCEPT, ACCEPT_LANGUAGE, APP_TYPE, BX_V, COOKIE, CSRF_TOKEN, FORM_UUID, ORIGIN,
     USER_AGENT,
 };
 
@@ -178,7 +178,7 @@ pub async fn fetch_visitor_info(
         ("data", data_str),
     ];
 
-    let response = reqwest::Client::new()
+    let response = yida_client()
         .post(FETCH_URL)
         .query(&[
             ("_api", "nattyFetch"),
