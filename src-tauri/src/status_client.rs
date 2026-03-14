@@ -31,12 +31,12 @@ fn timestamp_to_date(ts_str: &str) -> String {
 }
 
 fn flow_status_text(code: &str) -> String {
+    // 映射来源：宜搭页面自定义 JS（switch (+item.flowStatus)）
     match code {
         "1" => "审核中".to_string(),
-        "2" => "已通过".to_string(),
-        "3" => "已拒绝".to_string(),
-        "4" => "已撤销".to_string(),
-        "5" => "已过期".to_string(),
+        "3" => "审核拒绝".to_string(),
+        "4" => "审核同意".to_string(),
+        "5" => "审核通过，权限未生效".to_string(),
         "6" => "权限已生效".to_string(),
         "7" => "权限已失效".to_string(),
         other => other.to_string(),
