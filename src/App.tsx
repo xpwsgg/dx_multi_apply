@@ -232,6 +232,12 @@ function App() {
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
   const submissionPointerRef = useRef(0);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+
+  const [batchVisitorModalOpen, setBatchVisitorModalOpen] = useState(false);
+  const [batchVisitorText, setBatchVisitorText] = useState("");
+  const [batchReceptionModalOpen, setBatchReceptionModalOpen] = useState(false);
+  const [batchReceptionText, setBatchReceptionText] = useState("");
 
   const startupLoginPhoneRef = useRef<string>("");
   const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
@@ -605,13 +611,21 @@ function App() {
       const item = normalizeLog(event.payload ?? {});
       setLogs((prev) => [...prev, item]);
 
-      if (item.result === "success" || item.result === "skipped") {
+      if (item.result === "success" || item.result === "skipped" || item.result === "failed") {
         setProcessedCount((prev) => prev + 1);
         // 更新对应申请行状态
         setSubmissionItems((prev) => {
           const idx = submissionPointerRef.current;
           if (idx < prev.length) {
             submissionPointerRef.current = idx + 1;
+            // 自动滚动到当前处理行
+            const wrap = tableWrapRef.current;
+            if (wrap) {
+              const row = wrap.querySelector(`tr[data-index="${idx}"]`);
+              if (row) {
+                row.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }
             return prev.map((si, i) =>
               i === idx ? { ...si, status: item.result as SubmissionStatus } : si
             );
@@ -639,21 +653,6 @@ function App() {
         item.result === "stopped"
       ) {
         setCountdownSeconds(null);
-      }
-
-      if (item.result === "failed") {
-        // 单条失败，更新对应行
-        setSubmissionItems((prev) => {
-          const idx = submissionPointerRef.current;
-          if (idx < prev.length) {
-            submissionPointerRef.current = idx + 1;
-            return prev.map((si, i) =>
-              i === idx ? { ...si, status: "failed" } : si
-            );
-          }
-          return prev;
-        });
-        setIsRunning(false);
       }
 
       if (item.result === "stopped") {
@@ -715,6 +714,14 @@ function App() {
     };
   }, [logActionFeedback]);
 
+  useEffect(() => {
+    if (!errorMessage) return;
+    const timer = window.setTimeout(() => {
+      setErrorMessage(undefined);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [errorMessage]);
+
   const isRunningRef = useRef(isRunning);
   useEffect(() => {
     isRunningRef.current = isRunning;
@@ -740,6 +747,11 @@ function App() {
           }
         }
 
+        try {
+          await invoke("clear_log");
+        } catch {
+          // 清理失败不阻止关闭
+        }
         await getCurrentWindow().destroy();
       })
       .then((unlistenFn) => {
@@ -919,7 +931,12 @@ function App() {
       setCompletionModalOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("批量提交已手动停止")) {
+      if (message.includes("批量提交已手动停止")) {
+        // 手动停止不显示错误
+      } else if (message.includes("条失败")) {
+        // 部分失败，显示完成弹窗（弹窗内有失败统计）
+        setCompletionModalOpen(true);
+      } else {
         setErrorMessage(message);
       }
     } finally {
@@ -999,6 +1016,109 @@ function App() {
     }
   };
 
+  const confirmBatchVisitors = async () => {
+    const lines = batchVisitorText
+      .split(/[\n,;，；]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (lines.length === 0) return;
+
+    const existingIds = new Set(visitors.map((v) => v.idCard.trim()).filter((id) => id.length > 0));
+    const newIds = lines.filter((id) => !existingIds.has(id));
+    if (newIds.length === 0) {
+      setErrorMessage("所有身份证号已存在于列表中");
+      setBatchVisitorModalOpen(false);
+      setBatchVisitorText("");
+      return;
+    }
+
+    // 移除空行，追加新行
+    const kept = visitors.filter((v) => v.idCard.trim().length > 0);
+    const newRows: VisitorRow[] = newIds.map((idCard) => ({ idCard, loading: true }));
+    const allRows = [...kept, ...newRows];
+    setVisitors(allRows);
+    setBatchVisitorModalOpen(false);
+    setBatchVisitorText("");
+
+    // 逐个查询
+    const startIdx = kept.length;
+    for (let i = 0; i < newIds.length; i++) {
+      const idx = startIdx + i;
+      const idCard = newIds[i];
+      if (!account.trim()) {
+        setVisitors((prev) =>
+          prev.map((v, j) =>
+            j === idx ? { ...v, loading: false, error: "请先填写申请人手机号" } : v
+          )
+        );
+        continue;
+      }
+      try {
+        const info = await invoke<VisitorInfo>("fetch_visitor_info", {
+          account: account.trim(),
+          idCard,
+        });
+        setVisitors((prev) =>
+          prev.map((v, j) =>
+            j === idx ? { ...v, loading: false, info, error: undefined } : v
+          )
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        setVisitors((prev) =>
+          prev.map((v, j) =>
+            j === idx ? { ...v, loading: false, info: undefined, error: msg } : v
+          )
+        );
+      }
+    }
+  };
+
+  const confirmBatchReceptions = async () => {
+    const lines = batchReceptionText
+      .split(/[\n,;，；]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (lines.length === 0) return;
+
+    const existingIds = new Set(receptions.map((r) => r.employeeId.trim()).filter((id) => id.length > 0));
+    const newIds = lines.filter((id) => !existingIds.has(id));
+    if (newIds.length === 0) {
+      setErrorMessage("所有员工号已存在于列表中");
+      setBatchReceptionModalOpen(false);
+      setBatchReceptionText("");
+      return;
+    }
+
+    const kept = receptions.filter((r) => r.employeeId.trim().length > 0);
+    const newRows: ReceptionRow[] = newIds.map((employeeId) => ({ employeeId, loading: true }));
+    const allRows = [...kept, ...newRows];
+    setReceptions(allRows);
+    setBatchReceptionModalOpen(false);
+    setBatchReceptionText("");
+
+    const startIdx = kept.length;
+    for (let i = 0; i < newIds.length; i++) {
+      const idx = startIdx + i;
+      const employeeId = newIds[i];
+      try {
+        const info = await invoke<ReceptionInfo>("fetch_reception_info", { employeeId });
+        setReceptions((prev) =>
+          prev.map((r, j) =>
+            j === idx ? { ...r, loading: false, info, error: undefined } : r
+          )
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        setReceptions((prev) =>
+          prev.map((r, j) =>
+            j === idx ? { ...r, loading: false, info: undefined, error: msg } : r
+          )
+        );
+      }
+    }
+  };
+
   const clearLogs = async () => {
     setLogs([]);
     try {
@@ -1033,6 +1153,12 @@ function App() {
           <span className="factory-divider" />
           <span className="factory-tag">{factoryInfo.part}</span>
           <span className="factory-tag">{factoryInfo.applyType}</span>
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="error-banner">
+          <span>{errorMessage}</span>
+          <button type="button" className="error-banner-close" onClick={() => setErrorMessage(undefined)}>&times;</button>
         </div>
       ) : null}
       <div className="layout">
@@ -1099,6 +1225,11 @@ function App() {
                     onChange={(e) =>
                       updateVisitorIdCard(index, e.currentTarget.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isRunning && !visitor.loading && visitor.idCard.trim() && account.trim()) {
+                        queryVisitor(index);
+                      }
+                    }}
                   />
                   <button
                     type="button"
@@ -1149,14 +1280,24 @@ function App() {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            className="btn-add"
-            disabled={isRunning}
-            onClick={addVisitor}
-          >
-            + 添加访客
-          </button>
+          <div className="btn-add-row">
+            <button
+              type="button"
+              className="btn-add"
+              disabled={isRunning}
+              onClick={addVisitor}
+            >
+              + 添加访客
+            </button>
+            <button
+              type="button"
+              className="btn-add"
+              disabled={isRunning}
+              onClick={() => { setBatchVisitorText(""); setBatchVisitorModalOpen(true); }}
+            >
+              批量添加
+            </button>
+          </div>
         </div>
 
         <div className="block">
@@ -1173,6 +1314,11 @@ function App() {
                     onChange={(e) =>
                       updateReceptionEmployeeId(index, e.currentTarget.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isRunning && !reception.loading && reception.employeeId.trim()) {
+                        queryReception(index);
+                      }
+                    }}
                   />
                   <button
                     type="button"
@@ -1209,14 +1355,24 @@ function App() {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            className="btn-add"
-            disabled={isRunning}
-            onClick={addReception}
-          >
-            + 添加接待人
-          </button>
+          <div className="btn-add-row">
+            <button
+              type="button"
+              className="btn-add"
+              disabled={isRunning}
+              onClick={addReception}
+            >
+              + 添加接待人
+            </button>
+            <button
+              type="button"
+              className="btn-add"
+              disabled={isRunning}
+              onClick={() => { setBatchReceptionText(""); setBatchReceptionModalOpen(true); }}
+            >
+              批量添加
+            </button>
+          </div>
         </div>
 
         <div className="block">
@@ -1245,7 +1401,7 @@ function App() {
           </div>
         </div>
 
-        {errorMessage ? <p className="error">{errorMessage}</p> : null}
+
       </section>
 
       <aside className="panel panel-right">
@@ -1270,7 +1426,7 @@ function App() {
         </div>
 
         {/* 中部申请列表 */}
-        <div className="submission-table-wrap">
+        <div className="submission-table-wrap" ref={tableWrapRef}>
           {submissionItems.length === 0 ? (
             <p className="empty">请先选择日期并确认接待人</p>
           ) : (
@@ -1287,7 +1443,7 @@ function App() {
               </thead>
               <tbody>
                 {submissionItems.map((item, idx) => (
-                  <tr key={`${item.date}-${item.receptionName}-${idx}`} className={`submission-row-${item.status}`}>
+                  <tr key={`${item.date}-${item.receptionName}-${idx}`} data-index={idx} className={`submission-row-${item.status}`}>
                     <td>{idx + 1}</td>
                     <td>{item.date}</td>
                     <td>{item.weekday}</td>
@@ -1365,8 +1521,12 @@ function App() {
         return (
           <div className="modal-overlay" onClick={() => setCompletionModalOpen(false)}>
             <div className="completion-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="completion-icon">✓</div>
-              <h3 className="completion-title">任务已完成</h3>
+              <div className={failedCount > 0 ? "completion-icon completion-icon-warning" : "completion-icon completion-icon-success"}>
+                {failedCount > 0 ? "!" : "✓"}
+              </div>
+              <h3 className="completion-title">
+                {failedCount > 0 ? "任务已完成（部分失败）" : "任务已完成"}
+              </h3>
               <div className="completion-stats">
                 {successCount > 0 && <span className="stat-item stat-success">提交成功 {successCount}</span>}
                 {skippedCount > 0 && <span className="stat-item stat-skipped">已跳过 {skippedCount}</span>}
@@ -1524,6 +1684,88 @@ function App() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* 批量添加访客弹窗 */}
+      {batchVisitorModalOpen ? (
+        <div className="modal-overlay" onClick={() => setBatchVisitorModalOpen(false)}>
+          <div className="batch-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>批量添加访客</h3>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setBatchVisitorModalOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="batch-modal-body">
+              <p className="batch-hint">请输入身份证号，每行一个：</p>
+              <textarea
+                className="batch-textarea"
+                rows={8}
+                placeholder={"310101199001011234\n320102199002022345\n330103199003033456"}
+                value={batchVisitorText}
+                onChange={(e) => setBatchVisitorText(e.currentTarget.value)}
+                autoFocus
+              />
+            </div>
+            <div className="batch-modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setBatchVisitorModalOpen(false)}>
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={!batchVisitorText.trim()}
+                onClick={confirmBatchVisitors}
+              >
+                确认添加
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 批量添加接待人弹窗 */}
+      {batchReceptionModalOpen ? (
+        <div className="modal-overlay" onClick={() => setBatchReceptionModalOpen(false)}>
+          <div className="batch-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>批量添加接待人</h3>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setBatchReceptionModalOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="batch-modal-body">
+              <p className="batch-hint">请输入员工号，每行一个：</p>
+              <textarea
+                className="batch-textarea"
+                rows={8}
+                placeholder={"E001\nE002\nE003"}
+                value={batchReceptionText}
+                onChange={(e) => setBatchReceptionText(e.currentTarget.value)}
+                autoFocus
+              />
+            </div>
+            <div className="batch-modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setBatchReceptionModalOpen(false)}>
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={!batchReceptionText.trim()}
+                onClick={confirmBatchReceptions}
+              >
+                确认添加
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

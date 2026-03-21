@@ -158,6 +158,8 @@ async fn start_batch_submit(
     let _ = form_state_store::save_form_state(&app_handle, &form_state);
 
     // Iterate through each reception and submit
+    let mut fail_count: u32 = 0;
+
     for reception in &receptions {
         let mut sorted_dates = dates.clone();
         sorted_dates.sort_unstable();
@@ -194,6 +196,13 @@ async fn start_batch_submit(
             let date = NaiveDate::parse_from_str(&date_text, "%Y-%m-%d")
                 .map_err(|err| format!("invalid date {date_text}: {err}"))?;
 
+            // 判断当前项之后是否还有待处理项（用于决定是否等待）
+            let has_pending_after_current =
+                sorted_dates.iter().skip(index + 1).any(|next_date| {
+                    let next_key = format!("{}-{}", next_date, reception.employee_id);
+                    !existing_keys.contains(&next_key)
+                });
+
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
                     existing_keys.insert(key.clone());
@@ -210,12 +219,6 @@ async fn start_batch_submit(
                             "response_body": response_text
                         }),
                     );
-
-                    let has_pending_after_current =
-                        sorted_dates.iter().skip(index + 1).any(|next_date| {
-                            let next_key = format!("{}-{}", next_date, reception.employee_id);
-                            !existing_keys.contains(&next_key)
-                        });
 
                     let wait_seconds =
                         has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
@@ -237,6 +240,7 @@ async fn start_batch_submit(
                     }
                 }
                 Err(err) => {
+                    fail_count += 1;
                     let reason = err.message.clone();
                     let _ = log_store::append_log(
                         &app_handle,
@@ -248,23 +252,34 @@ async fn start_batch_submit(
                             "response_body": err.response_raw
                         }),
                     );
-                    let _ = app_handle.emit(
-                        "batch-log",
-                        json!({
-                            "date": date_text,
-                            "result": "failed",
-                            "reason": format!("接待人 {}: {}", reception.name, reason),
-                            "responseRaw": err.response_raw
-                        }),
-                    );
-                    app_state::finish(&state);
-                    return Err(format!("接待人 {}: {}", reception.name, reason));
+
+                    let wait_seconds =
+                        has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
+                    let mut failed_payload = json!({
+                        "date": date_text,
+                        "result": "failed",
+                        "reason": format!("接待人 {}: {}", reception.name, reason),
+                        "responseRaw": err.response_raw
+                    });
+                    if let Some(wait_seconds) = wait_seconds {
+                        failed_payload["waitSeconds"] = json!(wait_seconds);
+                    }
+                    let _ = app_handle.emit("batch-log", failed_payload);
+
+                    if let Some(wait_seconds) = wait_seconds {
+                        if !app_state::is_stopped(&state) {
+                            tokio::time::sleep(std::time::Duration::from_secs(wait_seconds)).await;
+                        }
+                    }
                 }
             }
         }
     }
 
     app_state::finish(&state);
+    if fail_count > 0 {
+        return Err(format!("批量提交完成，其中 {fail_count} 条失败"));
+    }
     Ok(())
 }
 

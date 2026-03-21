@@ -567,6 +567,56 @@ button:disabled {
   font-size: 13px;
 }
 
+.error-banner {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  animation: error-slide-in 0.25s ease-out;
+}
+
+.error-banner-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--error);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.error-banner-close:hover:enabled {
+  background: var(--error-border);
+  box-shadow: none;
+}
+
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .countdown {
   margin: 0;
   padding: 7px 10px;
@@ -1031,10 +1081,17 @@ button:disabled {
   height: 56px;
   margin: 0 auto 16px;
   border-radius: 50%;
-  background: var(--brand);
   color: #fff;
   font-size: 28px;
   line-height: 56px;
+}
+
+.completion-icon-success {
+  background: var(--success);
+}
+
+.completion-icon-warning {
+  background: #F59E0B;
 }
 
 .completion-title {
@@ -1075,6 +1132,70 @@ button:disabled {
 
 .completion-btn {
   min-width: 120px;
+}
+
+/* ---- Batch Modal ---- */
+
+.batch-modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.batch-modal-body {
+  padding: 16px 20px;
+}
+
+.batch-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.batch-textarea {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: "SF Mono", "Menlo", "Monaco", monospace;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.batch-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(212, 32, 39, 0.1);
+}
+
+.batch-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+}
+
+/* ---- Button Add Row ---- */
+
+.btn-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-add-row .btn-add {
+  flex: 1;
+  margin-top: 0;
 }
 
 /* ---- Log Modal Body ---- */
