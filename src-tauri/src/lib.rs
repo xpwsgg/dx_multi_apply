@@ -566,6 +566,11 @@ async fn query_visitor_status(
 }
 
 #[tauri::command]
+fn clear_log(app_handle: tauri::AppHandle) -> Result<(), String> {
+    log_store::clear_log(&app_handle)
+}
+
+#[tauri::command]
 fn clear_token(app_handle: tauri::AppHandle) -> Result<(), String> {
     token_store::clear_token(&app_handle)
 }
@@ -595,6 +600,7 @@ pub fn run() {
             get_token_status,
             check_token,
             query_visitor_status,
+            clear_log,
             clear_token
         ])
         .run(tauri::generate_context!())

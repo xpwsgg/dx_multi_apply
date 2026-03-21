@@ -999,8 +999,13 @@ function App() {
     }
   };
 
-  const clearLogs = () => {
+  const clearLogs = async () => {
     setLogs([]);
+    try {
+      await invoke("clear_log");
+    } catch {
+      // 磁盘日志清理失败不影响前端
+    }
     setLogActionFeedback({ type: "success", message: "日志已清空" });
   };
 
@@ -1232,6 +1237,7 @@ function App() {
               <input
                 type="date"
                 value={endDate}
+                min={startDate || new Date().toISOString().split("T")[0]}
                 disabled={isRunning}
                 onChange={(e) => setEndDate(e.currentTarget.value)}
               />

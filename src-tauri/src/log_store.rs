@@ -19,6 +19,15 @@ fn log_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(log_dir.join(LOG_FILE_NAME))
 }
 
+pub fn clear_log(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    let path = log_file_path(app_handle)?;
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|err| format!("failed to remove log file {}: {err}", path.display()))?;
+    }
+    Ok(())
+}
+
 pub fn append_log(app_handle: &tauri::AppHandle, entry: &serde_json::Value) -> Result<(), String> {
     let path = log_file_path(app_handle)?;
 
