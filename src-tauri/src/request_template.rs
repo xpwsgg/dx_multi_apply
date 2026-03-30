@@ -6,6 +6,25 @@ use crate::reception_client::ReceptionInfo;
 use crate::visitor_client::VisitorInfo;
 
 const VALUE_TEMPLATE: &str = include_str!("request_template.json");
+const SPECIAL_VISIT_AREA_RECEPTION_ID: &str = "52091191";
+
+fn apply_visit_area_override(field: &mut Value, reception: &ReceptionInfo) {
+    if reception.employee_id != SPECIAL_VISIT_AREA_RECEPTION_ID {
+        return;
+    }
+
+    field["fieldData"]["value"] = Value::from("进入制造现场");
+    field["fieldData"]["text"] = Value::from("进入车间/管制区域");
+    field["options"] = serde_json::json!([{
+        "defaultChecked": false,
+        "syncLabelValue": false,
+        "__sid": "item_m56iixss",
+        "text": "进入车间/管制区域",
+        "__sid__": "serial_m56iixsp",
+        "value": "进入制造现场",
+        "sid": "serial_khe7yak4"
+    }]);
+}
 
 fn build_visitor_row(visitor: &VisitorInfo) -> Value {
     serde_json::json!([
@@ -131,6 +150,9 @@ pub fn build_payload(
             }
             ("TextField", "接待人联系方式") => {
                 field["fieldData"]["value"] = Value::from(reception.phone.as_str());
+            }
+            ("SelectField", "到访区域") => {
+                apply_visit_area_override(field, reception);
             }
             ("DateField", "到访日期") => {
                 field["fieldData"]["value"] = Value::from(to_midnight_timestamp_ms(date));

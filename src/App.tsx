@@ -37,6 +37,7 @@ type VisitorRow = {
 
 type BatchLogItem = {
   date?: string;
+  receptionId?: string;
   result: string;
   reason?: string;
   waitSeconds?: number;
@@ -45,6 +46,7 @@ type BatchLogItem = {
 
 type BatchLogPayload = {
   date?: unknown;
+  receptionId?: unknown;
   result?: unknown;
   reason?: unknown;
   waitSeconds?: unknown;
@@ -62,6 +64,7 @@ type SubmissionStatus = "pending" | "submitting" | "success" | "skipped" | "fail
 type SubmissionItem = {
   date: string;
   weekday: string;
+  receptionId: string;
   receptionName: string;
   receptionDept: string;
   status: SubmissionStatus;
@@ -103,15 +106,29 @@ type VisitorStatusRecord = {
   createTime: string;
 };
 
+const MAX_VISIBLE_LOGS = 200;
+const MAX_LOG_TEXT_LENGTH = 4000;
+
+function truncateLogText(text: string, maxLength: number = MAX_LOG_TEXT_LENGTH): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength)}...[已截断 ${text.length - maxLength} 个字符]`;
+}
+
 function normalizeLog(payload: BatchLogPayload): BatchLogItem {
   return {
     date: typeof payload.date === "string" ? payload.date : undefined,
+    receptionId:
+      typeof payload.receptionId === "string" ? payload.receptionId : undefined,
     result: typeof payload.result === "string" ? payload.result : "unknown",
     reason: typeof payload.reason === "string" ? payload.reason : undefined,
     waitSeconds:
       typeof payload.waitSeconds === "number" ? payload.waitSeconds : undefined,
     responseRaw:
-      typeof payload.responseRaw === "string" ? payload.responseRaw : undefined,
+      typeof payload.responseRaw === "string"
+        ? truncateLogText(payload.responseRaw)
+        : undefined,
   };
 }
 
@@ -138,6 +155,18 @@ function formatHistoryTime(iso: string): string {
     return iso;
   }
   return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function buildExistingSubmissionKey(date: string, receptionId: string): string {
+  return `${date}::${receptionId}`;
+}
+
+function getLocalTodayDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function serializeLogs(logs: BatchLogItem[]): string {
@@ -215,7 +244,7 @@ function App() {
   const [dates, setDates] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState<BatchLogItem[]>([]);
-  const [existingDates, setExistingDates] = useState<string[]>([]);
+  const [existingSubmissionKeys, setExistingSubmissionKeys] = useState<string[]>([]);
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -231,7 +260,6 @@ function App() {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
-  const submissionPointerRef = useRef(0);
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const [batchVisitorModalOpen, setBatchVisitorModalOpen] = useState(false);
@@ -240,16 +268,43 @@ function App() {
   const [batchReceptionText, setBatchReceptionText] = useState("");
 
   const startupLoginPhoneRef = useRef<string>("");
-  const existingDateSet = useMemo(() => new Set(existingDates), [existingDates]);
+  const todayDate = useMemo(() => getLocalTodayDate(), []);
+  const existingSubmissionKeySet = useMemo(
+    () => new Set(existingSubmissionKeys),
+    [existingSubmissionKeys]
+  );
 
   const allVisitorsReady = visitors.length > 0 && visitors.every((v) => v.info && !v.loading);
   const allReceptionsReady = receptions.length > 0 && receptions.every((r) => r.info && !r.loading);
 
   // 自动生成申请列表：dates × receptions 笛卡尔积
+  const confirmedVisitors = useMemo(
+    () => visitors.filter((v) => v.info).map((v) => v.info!),
+    [visitors]
+  );
   const confirmedReceptions = useMemo(
     () => receptions.filter((r) => r.info).map((r) => r.info!),
     [receptions]
   );
+  const confirmedVisitorIdCards = useMemo(() => {
+    const ids = confirmedVisitors
+      .map((visitor) => visitor.idCard.trim())
+      .filter((idCard) => idCard.length > 0);
+    ids.sort();
+    return ids;
+  }, [confirmedVisitors]);
+  const confirmedVisitorIdKey = useMemo(
+    () => confirmedVisitorIdCards.join(","),
+    [confirmedVisitorIdCards]
+  );
+  const executionOrderKeys = useMemo(() => {
+    const sortedDates = [...dates].sort();
+    return confirmedReceptions.flatMap((reception) =>
+      sortedDates.map((date) =>
+        buildExistingSubmissionKey(date, reception.employeeId)
+      )
+    );
+  }, [dates, confirmedReceptions]);
 
   useEffect(() => {
     if (isRunning) return; // 提交中不重新生成
@@ -263,15 +318,18 @@ function App() {
         items.push({
           date,
           weekday: weekdayLabel(date),
+          receptionId: rec.employeeId,
           receptionName: rec.name,
           receptionDept: rec.department,
           status: "pending",
-          existing: existingDateSet.has(date),
+          existing: existingSubmissionKeySet.has(
+            buildExistingSubmissionKey(date, rec.employeeId)
+          ),
         });
       }
     }
     setSubmissionItems(items);
-  }, [dates, confirmedReceptions, existingDateSet, isRunning]);
+  }, [dates, confirmedReceptions, existingSubmissionKeySet, isRunning]);
   const canSubmit =
     account.trim().length > 0 &&
     allVisitorsReady &&
@@ -279,21 +337,56 @@ function App() {
     dates.length > 0 &&
     !isRunning;
 
-  const syncExistingDates = async (targetDates: string[]) => {
-    if (targetDates.length === 0) {
-      setExistingDates([]);
+  const syncExistingSubmissionKeys = async (
+    targetDates: string[],
+    targetVisitorIdCards: string[] = confirmedVisitorIdCards,
+    targetReceptions: ReceptionInfo[] = confirmedReceptions
+  ) => {
+    if (
+      targetDates.length === 0 ||
+      targetVisitorIdCards.length === 0 ||
+      targetReceptions.length === 0
+    ) {
+      setExistingSubmissionKeys([]);
       return [] as string[];
     }
     try {
-      const existing = await invoke<string[]>("get_existing_dates", {
-        dates: targetDates,
-      });
-      setExistingDates(existing);
-      return existing;
+      const existingGroups = await Promise.all(
+        targetReceptions.map(async (reception) => {
+          const existingDates = await invoke<string[]>("get_existing_keys", {
+            dates: targetDates,
+            receptionId: reception.employeeId,
+            visitorIdCards: targetVisitorIdCards,
+          });
+          return existingDates.map((date) =>
+            buildExistingSubmissionKey(date, reception.employeeId)
+          );
+        })
+      );
+      const existingKeys = Array.from(new Set(existingGroups.flat()));
+      setExistingSubmissionKeys(existingKeys);
+      return existingKeys;
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       return [] as string[];
     }
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    setEndDate((previousEndDate) => {
+      if (!value) {
+        return previousEndDate;
+      }
+      if (!previousEndDate || previousEndDate < value) {
+        return value;
+      }
+      return previousEndDate;
+    });
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
   };
 
   useEffect(() => {
@@ -609,43 +702,68 @@ function App() {
 
     listen<BatchLogPayload>("batch-log", (event) => {
       const item = normalizeLog(event.payload ?? {});
-      setLogs((prev) => [...prev, item]);
+      setLogs((prev) => [...prev, item].slice(-MAX_VISIBLE_LOGS));
 
       if (item.result === "success" || item.result === "skipped" || item.result === "failed") {
         setProcessedCount((prev) => prev + 1);
-        // 更新对应申请行状态
-        setSubmissionItems((prev) => {
-          const idx = submissionPointerRef.current;
-          if (idx < prev.length) {
-            submissionPointerRef.current = idx + 1;
-            // 自动滚动到当前处理行
+        if (item.date && item.receptionId) {
+          const currentKey = buildExistingSubmissionKey(item.date, item.receptionId);
+          const currentExecutionIndex = executionOrderKeys.indexOf(currentKey);
+          const nextKey =
+            currentExecutionIndex >= 0
+              ? executionOrderKeys[currentExecutionIndex + 1]
+              : undefined;
+
+          setSubmissionItems((prev) => {
+            const currentIndex = prev.findIndex(
+              (submissionItem) =>
+                buildExistingSubmissionKey(
+                  submissionItem.date,
+                  submissionItem.receptionId
+                ) === currentKey
+            );
+
+            if (currentIndex < 0) {
+              return prev;
+            }
+
             const wrap = tableWrapRef.current;
             if (wrap) {
-              const row = wrap.querySelector(`tr[data-index="${idx}"]`);
+              const row = wrap.querySelector(`tr[data-index="${currentIndex}"]`);
               if (row) {
                 row.scrollIntoView({ behavior: "smooth", block: "center" });
               }
             }
-            return prev.map((si, i) =>
-              i === idx ? { ...si, status: item.result as SubmissionStatus } : si
-            );
-          }
-          return prev;
-        });
+
+            return prev.map((submissionItem, index) => {
+              const submissionKey = buildExistingSubmissionKey(
+                submissionItem.date,
+                submissionItem.receptionId
+              );
+
+              if (index === currentIndex) {
+                return {
+                  ...submissionItem,
+                  status: item.result as SubmissionStatus,
+                };
+              }
+
+              if (
+                nextKey &&
+                submissionKey === nextKey &&
+                submissionItem.status === "pending"
+              ) {
+                return { ...submissionItem, status: "submitting" };
+              }
+
+              return submissionItem;
+            });
+          });
+        }
       }
 
       if (typeof item.waitSeconds === "number" && item.waitSeconds > 0) {
         setCountdownSeconds(item.waitSeconds);
-        // 标记当前行为 submitting
-        setSubmissionItems((prev) => {
-          const idx = submissionPointerRef.current;
-          if (idx < prev.length) {
-            return prev.map((si, i) =>
-              i === idx ? { ...si, status: "submitting" } : si
-            );
-          }
-          return prev;
-        });
       } else if (
         item.result === "success" ||
         item.result === "skipped" ||
@@ -684,7 +802,7 @@ function App() {
         unlisten();
       }
     };
-  }, []);
+  }, [executionOrderKeys]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -882,22 +1000,30 @@ function App() {
       const expanded = expandDateRange(startDate, endDate);
       setDates(expanded);
       setErrorMessage(undefined);
-      void syncExistingDates(expanded);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "日期生成失败");
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, isRunning]);
+
+  useEffect(() => {
+    if (isRunning) return;
+    if (!allVisitorsReady || !allReceptionsReady) {
+      setExistingSubmissionKeys([]);
+      return;
+    }
+    void syncExistingSubmissionKeys(dates, confirmedVisitorIdCards, confirmedReceptions);
+  }, [
+    allReceptionsReady,
+    allVisitorsReady,
+    confirmedReceptions,
+    confirmedVisitorIdCards,
+    confirmedVisitorIdKey,
+    dates,
+    isRunning,
+  ]);
 
   const startSubmit = async () => {
     if (!canSubmit) return;
-
-    const confirmedVisitors = visitors
-      .filter((v) => v.info)
-      .map((v) => v.info as VisitorInfo);
-
-    const confirmedReceptions = receptions
-      .filter((r) => r.info)
-      .map((r) => r.info as ReceptionInfo);
 
     if (confirmedVisitors.length === 0 || confirmedReceptions.length === 0) {
       setErrorMessage("请先查询所有访客和接待人信息");
@@ -906,21 +1032,27 @@ function App() {
 
     try {
       setErrorMessage(undefined);
-      await syncExistingDates(dates);
+      await syncExistingSubmissionKeys(dates);
       setLogs([]);
       setProcessedCount(0);
       setCountdownSeconds(null);
-      submissionPointerRef.current = 0;
       // 重置所有行为 pending
       setSubmissionItems((prev) =>
         prev.map((si) => ({ ...si, status: "pending" as const }))
       );
-      // 标记第一行为 submitting
-      setSubmissionItems((prev) =>
-        prev.length > 0
-          ? prev.map((si, i) => (i === 0 ? { ...si, status: "submitting" as const } : si))
-          : prev
-      );
+      const firstExecutionKey = executionOrderKeys[0];
+      if (firstExecutionKey) {
+        setSubmissionItems((prev) =>
+          prev.map((submissionItem) =>
+            buildExistingSubmissionKey(
+              submissionItem.date,
+              submissionItem.receptionId
+            ) === firstExecutionKey
+              ? { ...submissionItem, status: "submitting" as const }
+              : submissionItem
+          )
+        );
+      }
       setIsRunning(true);
       await invoke("start_batch_submit", {
         account: account.trim(),
@@ -942,7 +1074,7 @@ function App() {
     } finally {
       setIsRunning(false);
       setCountdownSeconds(null);
-      await syncExistingDates(dates);
+      await syncExistingSubmissionKeys(dates);
     }
   };
 
@@ -983,7 +1115,7 @@ function App() {
     setStartDate("");
     setEndDate("");
     setDates([]);
-    setExistingDates([]);
+    setExistingSubmissionKeys([]);
     setSubmissionItems([]);
     setProcessedCount(0);
     setCountdownSeconds(null);
@@ -991,7 +1123,6 @@ function App() {
     setLogs([]);
     setStatusRecords([]);
     setLogActionFeedback(null);
-    submissionPointerRef.current = 0;
 
     // 重置登录状态
     setLoginStatus("idle");
@@ -1383,9 +1514,9 @@ function App() {
               <input
                 type="date"
                 value={startDate}
-                min={new Date().toISOString().split("T")[0]}
+                min={todayDate}
                 disabled={isRunning}
-                onChange={(e) => setStartDate(e.currentTarget.value)}
+                onChange={(e) => handleStartDateChange(e.currentTarget.value)}
               />
             </label>
             <label>
@@ -1393,9 +1524,9 @@ function App() {
               <input
                 type="date"
                 value={endDate}
-                min={startDate || new Date().toISOString().split("T")[0]}
+                min={startDate || todayDate}
                 disabled={isRunning}
-                onChange={(e) => setEndDate(e.currentTarget.value)}
+                onChange={(e) => handleEndDateChange(e.currentTarget.value)}
               />
             </label>
           </div>

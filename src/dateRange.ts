@@ -1,4 +1,5 @@
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DATE_RANGE_DAYS = 10;
 
 function parseDate(input: string): Date {
   if (!DATE_PATTERN.test(input)) {
@@ -40,6 +41,10 @@ export function expandDateRange(start: string, end: string): string[] {
   while (cursor <= endDate) {
     dates.push(formatDate(cursor));
     cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  if (dates.length > MAX_DATE_RANGE_DAYS) {
+    throw new Error(`日期区间不能超过 ${MAX_DATE_RANGE_DAYS} 天`);
   }
 
   return dates;

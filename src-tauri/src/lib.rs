@@ -34,6 +34,16 @@ mod request_template_tests;
 #[cfg(test)]
 mod submit_client_tests;
 
+fn serialize_visitor_ids(visitor_id_cards: Vec<String>) -> String {
+    let mut ids: Vec<String> = visitor_id_cards
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+    ids.sort_unstable();
+    ids.join(",")
+}
+
 #[tauri::command]
 async fn fetch_visitor_info(
     app_handle: tauri::AppHandle,
@@ -160,14 +170,25 @@ async fn start_batch_submit(
     // Iterate through each reception and submit
     let mut fail_count: u32 = 0;
 
+    let visitor_ids = serialize_visitor_ids(
+        visitors
+            .iter()
+            .map(|v| v.id_card.clone())
+            .collect::<Vec<String>>(),
+    );
+
     for reception in &receptions {
         let mut sorted_dates = dates.clone();
         sorted_dates.sort_unstable();
-        let mut existing_keys =
-            record_store::get_existing_keys(&app_handle, &sorted_dates, &reception.employee_id)?
-                .into_iter()
-                .map(|date| format!("{}-{}", date, reception.employee_id))
-                .collect::<std::collections::HashSet<_>>();
+        let mut existing_keys = record_store::get_existing_keys(
+            &app_handle,
+            &sorted_dates,
+            &reception.employee_id,
+            &visitor_ids,
+        )?
+        .into_iter()
+        .map(|date| format!("{}-{}", date, reception.employee_id))
+        .collect::<std::collections::HashSet<_>>();
 
         for (index, date_text) in sorted_dates.iter().enumerate() {
             let date_text = date_text.clone();
@@ -186,6 +207,7 @@ async fn start_batch_submit(
                     "batch-log",
                     json!({
                         "date": date_text,
+                        "receptionId": reception.employee_id,
                         "result": "skipped",
                         "reason": format!("already exists in local history for reception {}", reception.employee_id)
                     }),
@@ -197,16 +219,20 @@ async fn start_batch_submit(
                 .map_err(|err| format!("invalid date {date_text}: {err}"))?;
 
             // 判断当前项之后是否还有待处理项（用于决定是否等待）
-            let has_pending_after_current =
-                sorted_dates.iter().skip(index + 1).any(|next_date| {
-                    let next_key = format!("{}-{}", next_date, reception.employee_id);
-                    !existing_keys.contains(&next_key)
-                });
+            let has_pending_after_current = sorted_dates.iter().skip(index + 1).any(|next_date| {
+                let next_key = format!("{}-{}", next_date, reception.employee_id);
+                !existing_keys.contains(&next_key)
+            });
 
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
                     existing_keys.insert(key.clone());
-                    record_store::upsert_record(&app_handle, &date_text, &reception.employee_id)?;
+                    record_store::upsert_record(
+                        &app_handle,
+                        &date_text,
+                        &reception.employee_id,
+                        &visitor_ids,
+                    )?;
 
                     let response_text = submit_result.response_text;
                     let _ = log_store::append_log(
@@ -224,6 +250,7 @@ async fn start_batch_submit(
                         has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
                     let mut success_payload = json!({
                         "date": date_text,
+                        "receptionId": reception.employee_id,
                         "result": "success",
                         "reason": format!("接待人: {}", reception.name),
                         "responseRaw": response_text
@@ -257,6 +284,7 @@ async fn start_batch_submit(
                         has_pending_after_current.then(|| rand::thread_rng().gen_range(30..=50));
                     let mut failed_payload = json!({
                         "date": date_text,
+                        "receptionId": reception.employee_id,
                         "result": "failed",
                         "reason": format!("接待人 {}: {}", reception.name, reason),
                         "responseRaw": err.response_raw
@@ -301,16 +329,26 @@ fn get_existing_keys(
     app_handle: tauri::AppHandle,
     dates: Vec<String>,
     reception_id: String,
+    visitor_id_cards: Vec<String>,
 ) -> Result<Vec<String>, String> {
-    record_store::get_existing_keys(&app_handle, &dates, &reception_id)
+    let visitor_ids = serialize_visitor_ids(visitor_id_cards);
+    if visitor_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    record_store::get_existing_keys(&app_handle, &dates, &reception_id, &visitor_ids)
 }
 
 #[tauri::command]
 fn get_existing_dates(
     app_handle: tauri::AppHandle,
     dates: Vec<String>,
+    visitor_id_cards: Vec<String>,
 ) -> Result<Vec<String>, String> {
-    record_store::get_existing_dates(&app_handle, &dates)
+    let visitor_ids = serialize_visitor_ids(visitor_id_cards);
+    if visitor_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    record_store::get_existing_dates(&app_handle, &dates, &visitor_ids)
 }
 
 #[tauri::command]
@@ -359,29 +397,41 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
     let timestamp = Utc::now().to_rfc3339();
     let code = match auth_client::send_code(&phone).await {
         Ok(c) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "login_send_code",
-                "reason": format!("手机号 {phone} 验证码获取成功")
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "send_code",
-                "request_summary": format!("phone={phone}"),
-                "status": 200
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "login_send_code",
+                    "reason": format!("手机号 {phone} 验证码获取成功")
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "send_code",
+                    "request_summary": format!("phone={phone}"),
+                    "status": 200
+                }),
+            );
             c
         }
         Err(e) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "login_send_code_failed",
-                "reason": format!("手机号 {phone} | {e}")
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "send_code",
-                "request_summary": format!("phone={phone}"),
-                "error": e
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "login_send_code_failed",
+                    "reason": format!("手机号 {phone} | {e}")
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "send_code",
+                    "request_summary": format!("phone={phone}"),
+                    "error": e
+                }),
+            );
             return Err(e);
         }
     };
@@ -394,29 +444,41 @@ async fn start_login(app_handle: tauri::AppHandle, account: String) -> Result<()
     let timestamp = Utc::now().to_rfc3339();
     let ac_token = match auth_client::visitor_login(&phone, &code).await {
         Ok(token) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "login_visitor_login",
-                "reason": format!("手机号 {phone} 登录成功")
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "visitor_login",
-                "request_summary": format!("phone={phone}"),
-                "status": 200
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "login_visitor_login",
+                    "reason": format!("手机号 {phone} 登录成功")
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "visitor_login",
+                    "request_summary": format!("phone={phone}"),
+                    "status": 200
+                }),
+            );
             token
         }
         Err(e) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "login_visitor_login_failed",
-                "reason": format!("手机号 {phone} | {e}")
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "visitor_login",
-                "request_summary": format!("phone={phone}"),
-                "error": e
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "login_visitor_login_failed",
+                    "reason": format!("手机号 {phone} | {e}")
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "visitor_login",
+                    "request_summary": format!("phone={phone}"),
+                    "error": e
+                }),
+            );
             return Err(e);
         }
     };
@@ -495,34 +557,46 @@ async fn check_token(app_handle: tauri::AppHandle) -> Result<bool, String> {
     let phone = &token_data.phone;
     match status_client::check_token_valid(phone, &token_data.ac_token).await {
         Ok(valid) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "check_token",
-                "reason": if valid {
-                    format!("手机号 {phone} 登录状态有效")
-                } else {
-                    format!("手机号 {phone} 登录已失效")
-                }
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "check_token",
-                "request_summary": format!("phone={phone}"),
-                "status": 200,
-                "valid": valid
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "check_token",
+                    "reason": if valid {
+                        format!("手机号 {phone} 登录状态有效")
+                    } else {
+                        format!("手机号 {phone} 登录已失效")
+                    }
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "check_token",
+                    "request_summary": format!("phone={phone}"),
+                    "status": 200,
+                    "valid": valid
+                }),
+            );
             Ok(valid)
         }
         Err(e) => {
-            let _ = app_handle.emit("batch-log", json!({
-                "result": "check_token_failed",
-                "reason": format!("手机号 {phone} | {e}")
-            }));
-            let _ = log_store::append_log(&app_handle, &json!({
-                "timestamp": timestamp,
-                "operation": "check_token",
-                "request_summary": format!("phone={phone}"),
-                "error": e
-            }));
+            let _ = app_handle.emit(
+                "batch-log",
+                json!({
+                    "result": "check_token_failed",
+                    "reason": format!("手机号 {phone} | {e}")
+                }),
+            );
+            let _ = log_store::append_log(
+                &app_handle,
+                &json!({
+                    "timestamp": timestamp,
+                    "operation": "check_token",
+                    "request_summary": format!("phone={phone}"),
+                    "error": e
+                }),
+            );
             Err(e)
         }
     }
@@ -597,6 +671,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            log_store::clear_log(&app.handle())?;
             record_store::init_db(&app.handle())?;
             Ok(())
         })
