@@ -17,9 +17,9 @@ impl AppState {
     }
 }
 
-pub fn validate_dates(dates: &[String]) -> Result<(), String> {
-    if dates.is_empty() {
-        return Err("日期不能为空".to_string());
+pub fn validate_non_empty_task_list<T>(tasks: &[T]) -> Result<(), String> {
+    if tasks.is_empty() {
+        return Err("任务不能为空".to_string());
     }
     Ok(())
 }

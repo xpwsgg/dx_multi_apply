@@ -970,6 +970,12 @@ button:disabled {
   background: var(--surface-alt);
 }
 
+.submission-table td:last-child,
+.submission-table th:last-child {
+  width: 64px;
+  text-align: center;
+}
+
 .submission-row-submitting {
   background: #FFFBEB;
 }
@@ -1031,6 +1037,10 @@ button:disabled {
   color: var(--text-secondary);
   background: #F3F4F6;
   border: 1px solid #D1D5DB;
+}
+
+.submission-delete-btn {
+  margin: 0 auto;
 }
 
 /* ---- Submission Actions Bar ---- */

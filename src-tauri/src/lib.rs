@@ -17,6 +17,7 @@ mod visitor_client;
 
 use chrono::{NaiveDate, Utc};
 use rand::Rng;
+use serde::Deserialize;
 use serde_json::json;
 use tauri::Emitter;
 
@@ -42,6 +43,13 @@ fn serialize_visitor_ids(visitor_id_cards: Vec<String>) -> String {
         .collect();
     ids.sort_unstable();
     ids.join(",")
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SubmissionTask {
+    date: String,
+    reception_id: String,
 }
 
 #[tauri::command]
@@ -146,11 +154,8 @@ async fn start_batch_submit(
     account: String,
     visitors: Vec<VisitorInfo>,
     receptions: Vec<ReceptionInfo>,
-    dates: Vec<String>,
+    tasks: Vec<SubmissionTask>,
 ) -> Result<(), String> {
-    app_state::validate_dates(&dates)?;
-    app_state::try_start(&state)?;
-
     if visitors.is_empty() {
         return Err("至少需要一个访客".to_string());
     }
@@ -159,50 +164,79 @@ async fn start_batch_submit(
         return Err("至少需要一个接待人".to_string());
     }
 
-    // Save form state for next session
-    let form_state = form_state_store::FormState {
-        account: account.clone(),
-        visitor_id_cards: visitors.iter().map(|v| v.id_card.clone()).collect(),
-        reception_ids: receptions.iter().map(|r| r.employee_id.clone()).collect(),
-    };
-    let _ = form_state_store::save_form_state(&app_handle, &form_state);
+    app_state::validate_non_empty_task_list(&tasks)?;
+    app_state::try_start(&state)?;
+    let result = async {
+        let form_state = form_state_store::FormState {
+            account: account.clone(),
+            visitor_id_cards: visitors.iter().map(|v| v.id_card.clone()).collect(),
+            reception_ids: receptions.iter().map(|r| r.employee_id.clone()).collect(),
+        };
+        let _ = form_state_store::save_form_state(&app_handle, &form_state);
 
-    // Iterate through each reception and submit
-    let mut fail_count: u32 = 0;
+        let mut fail_count: u32 = 0;
+        let visitor_ids = serialize_visitor_ids(
+            visitors
+                .iter()
+                .map(|v| v.id_card.clone())
+                .collect::<Vec<String>>(),
+        );
 
-    let visitor_ids = serialize_visitor_ids(
-        visitors
+        let reception_map = receptions
             .iter()
-            .map(|v| v.id_card.clone())
-            .collect::<Vec<String>>(),
-    );
+            .cloned()
+            .map(|reception| (reception.employee_id.clone(), reception))
+            .collect::<std::collections::HashMap<_, _>>();
 
-    for reception in &receptions {
-        let mut sorted_dates = dates.clone();
-        sorted_dates.sort_unstable();
-        let mut existing_keys = record_store::get_existing_keys(
-            &app_handle,
-            &sorted_dates,
-            &reception.employee_id,
-            &visitor_ids,
-        )?
-        .into_iter()
-        .map(|date| format!("{}-{}", date, reception.employee_id))
-        .collect::<std::collections::HashSet<_>>();
+        let mut dates_by_reception = std::collections::HashMap::<String, Vec<String>>::new();
+        for task in &tasks {
+            dates_by_reception
+                .entry(task.reception_id.clone())
+                .or_default()
+                .push(task.date.clone());
+        }
 
-        for (index, date_text) in sorted_dates.iter().enumerate() {
-            let date_text = date_text.clone();
+        let mut existing_keys_by_reception =
+            std::collections::HashMap::<String, std::collections::HashSet<String>>::new();
+        for (reception_id, reception_dates) in &mut dates_by_reception {
+            reception_dates.sort_unstable();
+            reception_dates.dedup();
+            let existing_keys = record_store::get_existing_keys(
+                &app_handle,
+                reception_dates,
+                reception_id,
+                &visitor_ids,
+            )?
+            .into_iter()
+            .map(|date| format!("{}-{}", date, reception_id))
+            .collect::<std::collections::HashSet<_>>();
+            existing_keys_by_reception.insert(reception_id.clone(), existing_keys);
+        }
+
+        for (index, task) in tasks.iter().enumerate() {
+            let date_text = task.date.clone();
+            let reception = reception_map
+                .get(&task.reception_id)
+                .ok_or_else(|| format!("未找到接待人 {}", task.reception_id))?;
             let key = format!("{}-{}", date_text, reception.employee_id);
+
             if app_state::is_stopped(&state) {
                 let _ = app_handle.emit(
                     "batch-log",
-                    json!({ "date": date_text, "result": "stopped", "reason": "manual stop" }),
+                    json!({
+                        "date": date_text,
+                        "receptionId": reception.employee_id,
+                        "result": "stopped",
+                        "reason": "manual stop"
+                    }),
                 );
-                app_state::finish(&state);
                 return Err("批量提交已手动停止".to_string());
             }
 
-            if existing_keys.contains(&key) {
+            if existing_keys_by_reception
+                .get(&task.reception_id)
+                .is_some_and(|existing_keys| existing_keys.contains(&key))
+            {
                 let _ = app_handle.emit(
                     "batch-log",
                     json!({
@@ -218,15 +252,20 @@ async fn start_batch_submit(
             let date = NaiveDate::parse_from_str(&date_text, "%Y-%m-%d")
                 .map_err(|err| format!("invalid date {date_text}: {err}"))?;
 
-            // 判断当前项之后是否还有待处理项（用于决定是否等待）
-            let has_pending_after_current = sorted_dates.iter().skip(index + 1).any(|next_date| {
-                let next_key = format!("{}-{}", next_date, reception.employee_id);
-                !existing_keys.contains(&next_key)
+            let has_pending_after_current = tasks.iter().skip(index + 1).any(|next_task| {
+                let next_key = format!("{}-{}", next_task.date, next_task.reception_id);
+                !existing_keys_by_reception
+                    .get(&next_task.reception_id)
+                    .is_some_and(|existing_keys| existing_keys.contains(&next_key))
             });
 
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
-                    existing_keys.insert(key.clone());
+                    if let Some(existing_keys) =
+                        existing_keys_by_reception.get_mut(&task.reception_id)
+                    {
+                        existing_keys.insert(key.clone());
+                    }
                     record_store::upsert_record(
                         &app_handle,
                         &date_text,
@@ -302,13 +341,16 @@ async fn start_batch_submit(
                 }
             }
         }
+
+        if fail_count > 0 {
+            return Err(format!("批量提交完成，其中 {fail_count} 条失败"));
+        }
+        Ok(())
     }
+    .await;
 
     app_state::finish(&state);
-    if fail_count > 0 {
-        return Err(format!("批量提交完成，其中 {fail_count} 条失败"));
-    }
-    Ok(())
+    result
 }
 
 #[tauri::command]

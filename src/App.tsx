@@ -71,6 +71,11 @@ type SubmissionItem = {
   existing: boolean;
 };
 
+type SubmissionTaskPayload = {
+  date: string;
+  receptionId: string;
+};
+
 type LogActionFeedback = {
   type: "success" | "error";
   message: string;
@@ -159,6 +164,36 @@ function formatHistoryTime(iso: string): string {
 
 function buildExistingSubmissionKey(date: string, receptionId: string): string {
   return `${date}::${receptionId}`;
+}
+
+function buildSubmissionItems(
+  dates: string[],
+  receptions: ReceptionInfo[],
+  existingSubmissionKeySet: Set<string>,
+  removedSubmissionKeySet: Set<string>
+): SubmissionItem[] {
+  const sortedDates = [...dates].sort();
+  const items: SubmissionItem[] = [];
+
+  for (const reception of receptions) {
+    for (const date of sortedDates) {
+      const submissionKey = buildExistingSubmissionKey(date, reception.employeeId);
+      if (removedSubmissionKeySet.has(submissionKey)) {
+        continue;
+      }
+      items.push({
+        date,
+        weekday: weekdayLabel(date),
+        receptionId: reception.employeeId,
+        receptionName: reception.name,
+        receptionDept: reception.department,
+        status: "pending",
+        existing: existingSubmissionKeySet.has(submissionKey),
+      });
+    }
+  }
+
+  return items;
 }
 
 function getLocalTodayDate(): string {
@@ -260,6 +295,7 @@ function App() {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
+  const [removedSubmissionKeys, setRemovedSubmissionKeys] = useState<string[]>([]);
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const [batchVisitorModalOpen, setBatchVisitorModalOpen] = useState(false);
@@ -272,6 +308,10 @@ function App() {
   const existingSubmissionKeySet = useMemo(
     () => new Set(existingSubmissionKeys),
     [existingSubmissionKeys]
+  );
+  const removedSubmissionKeySet = useMemo(
+    () => new Set(removedSubmissionKeys),
+    [removedSubmissionKeys]
   );
 
   const allVisitorsReady = visitors.length > 0 && visitors.every((v) => v.info && !v.loading);
@@ -298,13 +338,13 @@ function App() {
     [confirmedVisitorIdCards]
   );
   const executionOrderKeys = useMemo(() => {
-    const sortedDates = [...dates].sort();
-    return confirmedReceptions.flatMap((reception) =>
-      sortedDates.map((date) =>
-        buildExistingSubmissionKey(date, reception.employeeId)
-      )
-    );
-  }, [dates, confirmedReceptions]);
+    return buildSubmissionItems(
+      dates,
+      confirmedReceptions,
+      new Set<string>(),
+      removedSubmissionKeySet
+    ).map((item) => buildExistingSubmissionKey(item.date, item.receptionId));
+  }, [dates, confirmedReceptions, removedSubmissionKeySet]);
 
   useEffect(() => {
     if (isRunning) return; // 提交中不重新生成
@@ -312,31 +352,26 @@ function App() {
       setSubmissionItems([]);
       return;
     }
-    const sortedDates = [...dates].sort();
-    const items: SubmissionItem[] = [];
-    // 与后端执行顺序保持一致：按接待人依次处理，每个接待人内按日期升序
-    for (const rec of confirmedReceptions) {
-      for (const date of sortedDates) {
-        items.push({
-          date,
-          weekday: weekdayLabel(date),
-          receptionId: rec.employeeId,
-          receptionName: rec.name,
-          receptionDept: rec.department,
-          status: "pending",
-          existing: existingSubmissionKeySet.has(
-            buildExistingSubmissionKey(date, rec.employeeId)
-          ),
-        });
-      }
-    }
-    setSubmissionItems(items);
-  }, [dates, confirmedReceptions, existingSubmissionKeySet, isRunning]);
+    setSubmissionItems(
+      buildSubmissionItems(
+        dates,
+        confirmedReceptions,
+        existingSubmissionKeySet,
+        removedSubmissionKeySet
+      )
+    );
+  }, [
+    dates,
+    confirmedReceptions,
+    existingSubmissionKeySet,
+    isRunning,
+    removedSubmissionKeySet,
+  ]);
   const canSubmit =
     account.trim().length > 0 &&
     allVisitorsReady &&
     allReceptionsReady &&
-    dates.length > 0 &&
+    submissionItems.length > 0 &&
     !isRunning;
 
   const syncExistingSubmissionKeys = async (
@@ -996,6 +1031,22 @@ function App() {
     );
   };
 
+  const removeSubmissionItem = (date: string, receptionId: string) => {
+    if (isRunning) return;
+    const submissionKey = buildExistingSubmissionKey(date, receptionId);
+    setRemovedSubmissionKeys((prev) =>
+      prev.includes(submissionKey) ? prev : [...prev, submissionKey]
+    );
+    setSubmissionItems((prev) =>
+      prev.filter(
+        (item) =>
+          buildExistingSubmissionKey(item.date, item.receptionId) !== submissionKey
+      )
+    );
+    setProcessedCount(0);
+    setCountdownSeconds(null);
+  };
+
   useEffect(() => {
     if (!startDate || !endDate || isRunning) return;
     try {
@@ -1032,6 +1083,15 @@ function App() {
       return;
     }
 
+    const tasks: SubmissionTaskPayload[] = submissionItems.map((item) => ({
+      date: item.date,
+      receptionId: item.receptionId,
+    }));
+    if (tasks.length === 0) {
+      setErrorMessage("请至少保留一条任务");
+      return;
+    }
+
     try {
       setErrorMessage(undefined);
       await syncExistingSubmissionKeys(dates);
@@ -1042,7 +1102,10 @@ function App() {
       setSubmissionItems((prev) =>
         prev.map((si) => ({ ...si, status: "pending" as const }))
       );
-      const firstExecutionKey = executionOrderKeys[0];
+      const firstExecutionKey = buildExistingSubmissionKey(
+        tasks[0].date,
+        tasks[0].receptionId
+      );
       if (firstExecutionKey) {
         setSubmissionItems((prev) =>
           prev.map((submissionItem) =>
@@ -1060,7 +1123,7 @@ function App() {
         account: account.trim(),
         visitors: confirmedVisitors,
         receptions: confirmedReceptions,
-        dates,
+        tasks,
       });
       setCompletionModalOpen(true);
     } catch (error) {
@@ -1082,7 +1145,7 @@ function App() {
 
   const stopSubmit = async () => {
     if (!isRunning) return;
-    const hasUnfinishedTask = processedCount < dates.length * receptions.length;
+    const hasUnfinishedTask = processedCount < submissionItems.length;
     if (hasUnfinishedTask) {
       const confirmed = await confirm("任务未完成，确认停止任务吗？", {
         title: "确认停止任务",
@@ -1117,6 +1180,7 @@ function App() {
     setStartDate("");
     setEndDate("");
     setDates([]);
+    setRemovedSubmissionKeys([]);
     setExistingSubmissionKeys([]);
     setSubmissionItems([]);
     setProcessedCount(0);
@@ -1553,15 +1617,19 @@ function App() {
             </p>
           ) : null}
           <p className="submission-count">
-            {dates.length} 天 &times; {confirmedReceptions.length || 0} 接待人 ={" "}
-            <strong>{submissionItems.length}</strong> 条申请
+            日期范围 {dates.length} 天 | 接待人 {confirmedReceptions.length || 0} 人 | 待执行{" "}
+            <strong>{submissionItems.length}</strong> 条任务
           </p>
         </div>
 
         {/* 中部申请列表 */}
         <div className="submission-table-wrap" ref={tableWrapRef}>
           {submissionItems.length === 0 ? (
-            <p className="empty">请先选择日期并确认接待人</p>
+            <p className="empty">
+              {dates.length === 0 || confirmedReceptions.length === 0
+                ? "请先选择日期并确认接待人"
+                : "当前没有待执行任务，请保留至少一条任务"}
+            </p>
           ) : (
             <table className="submission-table">
               <thead>
@@ -1572,6 +1640,7 @@ function App() {
                   <th>接待人</th>
                   <th>部门</th>
                   <th>状态</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -1591,6 +1660,24 @@ function App() {
                         {item.status === "failed" && "失败"}
                         {item.status === "stopped" && "已停止"}
                       </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="icon-action-btn icon-action-btn-danger submission-delete-btn"
+                        onClick={() => removeSubmissionItem(item.date, item.receptionId)}
+                        disabled={isRunning}
+                        title="删除任务"
+                        aria-label={`删除 ${item.date} ${item.receptionName} 任务`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <line x1="10" y1="11" x2="10" y2="17" />
+                          <line x1="14" y1="11" x2="14" y2="17" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 ))}
