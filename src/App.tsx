@@ -204,6 +204,213 @@ function getLocalTodayDate(): string {
   return `${year}-${month}-${day}`;
 }
 
+function parseDateValue(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function getMonthAnchor(value?: string, min?: string): Date {
+  const source = value || min || getLocalTodayDate();
+  const parsed = parseDateValue(source);
+  if (!parsed) {
+    const today = parseDateValue(getLocalTodayDate());
+    return new Date(today?.getFullYear() ?? 1970, today?.getMonth() ?? 0, 1);
+  }
+  return new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+}
+
+function formatMonthTitle(month: Date): string {
+  return `${month.getFullYear()}年${String(month.getMonth() + 1).padStart(2, "0")}月`;
+}
+
+const MAX_DATE_RANGE_DAYS = 10;
+
+type CalendarDay = {
+  value: string;
+  dayNumber: number;
+  inCurrentMonth: boolean;
+  disabled: boolean;
+  isToday: boolean;
+};
+
+function buildCalendarDays(month: Date, min?: string): CalendarDay[] {
+  const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+  const gridStart = addDays(monthStart, -monthStart.getDay());
+  const today = getLocalTodayDate();
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const current = addDays(gridStart, index);
+    const value = formatDateValue(current);
+    return {
+      value,
+      dayNumber: current.getDate(),
+      inCurrentMonth: current.getMonth() === month.getMonth(),
+      disabled: Boolean(min && value < min),
+      isToday: value === today,
+    };
+  });
+}
+
+type DatePickerFieldProps = {
+  label: string;
+  value: string;
+  min?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+};
+
+function DatePickerField({
+  label,
+  value,
+  min,
+  disabled = false,
+  onChange,
+}: DatePickerFieldProps) {
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState<Date>(() => getMonthAnchor(value, min));
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setVisibleMonth(getMonthAnchor(value, min));
+    }
+  }, [min, open, value]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  const calendarDays = buildCalendarDays(visibleMonth, min);
+  const canGoPrev = !min || formatDateValue(addMonths(visibleMonth, -1)) >= min.slice(0, 7) + "-01";
+
+  return (
+    <div className="date-picker-field" ref={rootRef}>
+      <label>{label}</label>
+      <button
+        type="button"
+        className={`date-picker-trigger${open ? " date-picker-trigger-open" : ""}`}
+        onClick={() => {
+          if (disabled) {
+            return;
+          }
+          setVisibleMonth(getMonthAnchor(value, min));
+          setOpen((previous) => !previous);
+        }}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        <span className={value ? "date-picker-value" : "date-picker-placeholder"}>
+          {value || "请选择日期"}
+        </span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="date-picker-popover" role="dialog" aria-label={`${label}选择器`}>
+          <div className="date-picker-header">
+            <button
+              type="button"
+              className="date-picker-nav"
+              onClick={() => setVisibleMonth((previous) => addMonths(previous, -1))}
+              disabled={!canGoPrev}
+              aria-label="上个月"
+            >
+              ‹
+            </button>
+            <strong>{formatMonthTitle(visibleMonth)}</strong>
+            <button
+              type="button"
+              className="date-picker-nav"
+              onClick={() => setVisibleMonth((previous) => addMonths(previous, 1))}
+              aria-label="下个月"
+            >
+              ›
+            </button>
+          </div>
+          <div className="date-picker-weekdays">
+            {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
+              <span key={weekday}>{weekday}</span>
+            ))}
+          </div>
+          <div className="date-picker-grid">
+            {calendarDays.map((day) => {
+              const isSelected = day.value === value;
+              return (
+                <button
+                  key={day.value}
+                  type="button"
+                  className={[
+                    "date-picker-day",
+                    day.inCurrentMonth ? "" : "date-picker-day-outside",
+                    day.isToday ? "date-picker-day-today" : "",
+                    isSelected ? "date-picker-day-selected" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  disabled={day.disabled}
+                  onClick={() => {
+                    onChange(day.value);
+                    setOpen(false);
+                  }}
+                  aria-pressed={isSelected}
+                >
+                  {day.dayNumber}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function serializeLogs(logs: BatchLogItem[]): string {
   return logs
     .map((log, index) => {
@@ -410,20 +617,49 @@ function App() {
   };
 
   const handleStartDateChange = (value: string) => {
-    setStartDate(value);
-    setEndDate((previousEndDate) => {
-      if (!value) {
-        return previousEndDate;
-      }
-      if (!previousEndDate || previousEndDate < value) {
-        return value;
-      }
-      return previousEndDate;
-    });
+    const nextEnd = !value || !endDate || endDate < value ? value : endDate;
+    applyDateRangeSelection(value, nextEnd);
   };
 
   const handleEndDateChange = (value: string) => {
-    setEndDate(value);
+    applyDateRangeSelection(startDate, value);
+  };
+
+  const applyDateRangeSelection = (nextStart: string, nextEnd: string) => {
+    if (!nextStart || !nextEnd) {
+      setStartDate(nextStart);
+      setEndDate(nextEnd);
+      setDates([]);
+      setRemovedSubmissionKeys([]);
+      setErrorMessage(undefined);
+      return;
+    }
+
+    const start = parseDateValue(nextStart);
+    if (!start) {
+      setErrorMessage("日期格式无效");
+      return;
+    }
+
+    let normalizedEnd = nextEnd < nextStart ? nextStart : nextEnd;
+    const maxAllowedEnd = formatDateValue(addDays(start, MAX_DATE_RANGE_DAYS - 1));
+
+    if (normalizedEnd > maxAllowedEnd) {
+      normalizedEnd = maxAllowedEnd;
+      setErrorMessage(`日期区间不能超过 ${MAX_DATE_RANGE_DAYS} 天，已自动调整结束日期`);
+    } else {
+      setErrorMessage(undefined);
+    }
+
+    try {
+      const expanded = expandDateRange(nextStart, normalizedEnd);
+      setStartDate(nextStart);
+      setEndDate(normalizedEnd);
+      setDates(expanded);
+      setRemovedSubmissionKeys([]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "日期生成失败");
+    }
   };
 
   useEffect(() => {
@@ -1048,17 +1284,6 @@ function App() {
   };
 
   useEffect(() => {
-    if (!startDate || !endDate || isRunning) return;
-    try {
-      const expanded = expandDateRange(startDate, endDate);
-      setDates(expanded);
-      setErrorMessage(undefined);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "日期生成失败");
-    }
-  }, [startDate, endDate, isRunning]);
-
-  useEffect(() => {
     if (isRunning) return;
     if (!allVisitorsReady || !allReceptionsReady) {
       setExistingSubmissionKeys([]);
@@ -1575,26 +1800,20 @@ function App() {
         <div className="block">
           <h2>4. 到访日期</h2>
           <div className="date-fields">
-            <label>
-              开始日期
-              <input
-                type="date"
-                value={startDate}
-                min={todayDate}
-                disabled={isRunning}
-                onChange={(e) => handleStartDateChange(e.currentTarget.value)}
-              />
-            </label>
-            <label>
-              结束日期
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || todayDate}
-                disabled={isRunning}
-                onChange={(e) => handleEndDateChange(e.currentTarget.value)}
-              />
-            </label>
+            <DatePickerField
+              label="开始日期"
+              value={startDate}
+              min={todayDate}
+              disabled={isRunning}
+              onChange={handleStartDateChange}
+            />
+            <DatePickerField
+              label="结束日期"
+              value={endDate}
+              min={startDate || todayDate}
+              disabled={isRunning}
+              onChange={handleEndDateChange}
+            />
           </div>
         </div>
 
