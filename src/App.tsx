@@ -312,9 +312,11 @@ function App() {
       setSubmissionItems([]);
       return;
     }
+    const sortedDates = [...dates].sort();
     const items: SubmissionItem[] = [];
-    for (const date of dates) {
-      for (const rec of confirmedReceptions) {
+    // 与后端执行顺序保持一致：按接待人依次处理，每个接待人内按日期升序
+    for (const rec of confirmedReceptions) {
+      for (const date of sortedDates) {
         items.push({
           date,
           weekday: weekdayLabel(date),
