@@ -4898,7 +4898,7 @@ dependencies = [
 
 [[package]]
 name = "usersxiaodocumentscodevisit-batch-submitter"
-version = "2.5.11"
+version = "2.5.12"
 dependencies = [
  "chrono",
  "rand 0.8.5",

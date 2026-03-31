@@ -81,6 +81,11 @@ type LogActionFeedback = {
   message: string;
 };
 
+type BannerMessage = {
+  type: "info" | "success";
+  text: string;
+};
+
 type LoginStatus = "idle" | "logging-in" | "logged-in" | "failed";
 
 type LoginResultPayload = {
@@ -109,6 +114,23 @@ type VisitorStatusRecord = {
   dateEnd: string;
   flowStatus: string;
   createTime: string;
+};
+
+type RestoreProgress = {
+  active: boolean;
+  visitorDone: number;
+  visitorTotal: number;
+  receptionDone: number;
+  receptionTotal: number;
+};
+
+type BatchImportProgress = {
+  target: "visitor" | "reception";
+  done: number;
+  total: number;
+  success: number;
+  failed: number;
+  duplicates: number;
 };
 
 const MAX_VISIBLE_LOGS = 200;
@@ -194,6 +216,22 @@ function buildSubmissionItems(
   }
 
   return items;
+}
+
+function formatDurationRange(secondsMin: number, secondsMax: number): string {
+  const toText = (seconds: number) => {
+    if (seconds < 60) {
+      return `${seconds} 秒`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remain = seconds % 60;
+    return remain === 0 ? `${minutes} 分钟` : `${minutes} 分 ${remain} 秒`;
+  };
+
+  if (secondsMin === secondsMax) {
+    return toText(secondsMin);
+  }
+  return `${toText(secondsMin)} - ${toText(secondsMax)}`;
 }
 
 function getLocalTodayDate(): string {
@@ -472,6 +510,15 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
+function serializeTaskItems(items: SubmissionItem[]): string {
+  return items
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.date} | ${item.weekday} | ${item.receptionName}(${item.receptionDept}) | ${item.receptionId}`
+    )
+    .join("\n");
+}
+
 function App() {
   const [account, setAccount] = useState("");
   const [visitors, setVisitors] = useState<VisitorRow[]>([
@@ -490,6 +537,7 @@ function App() {
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [bannerMessage, setBannerMessage] = useState<BannerMessage | null>(null);
   const [logActionFeedback, setLogActionFeedback] = useState<LogActionFeedback | null>(null);
   const [factoryInfo, setFactoryInfo] = useState<{ company: string; part: string; applyType: string } | null>(null);
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
@@ -503,6 +551,15 @@ function App() {
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [submissionItems, setSubmissionItems] = useState<SubmissionItem[]>([]);
   const [removedSubmissionKeys, setRemovedSubmissionKeys] = useState<string[]>([]);
+  const [showOnlyActionableTasks, setShowOnlyActionableTasks] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgress>({
+    active: false,
+    visitorDone: 0,
+    visitorTotal: 0,
+    receptionDone: 0,
+    receptionTotal: 0,
+  });
+  const [batchImportProgress, setBatchImportProgress] = useState<BatchImportProgress | null>(null);
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const [batchVisitorModalOpen, setBatchVisitorModalOpen] = useState(false);
@@ -552,6 +609,37 @@ function App() {
       removedSubmissionKeySet
     ).map((item) => buildExistingSubmissionKey(item.date, item.receptionId));
   }, [dates, confirmedReceptions, removedSubmissionKeySet]);
+  const actionableSubmissionItems = useMemo(
+    () =>
+      showOnlyActionableTasks
+        ? submissionItems.filter((item) => !(item.existing && item.status === "pending"))
+        : submissionItems,
+    [showOnlyActionableTasks, submissionItems]
+  );
+  const skippedPreviewCount = useMemo(
+    () => submissionItems.filter((item) => item.existing).length,
+    [submissionItems]
+  );
+  const requestPreviewCount = useMemo(
+    () => submissionItems.filter((item) => !item.existing).length,
+    [submissionItems]
+  );
+  const waitSlotCount = Math.max(requestPreviewCount - 1, 0);
+  const estimatedWaitText = useMemo(
+    () => formatDurationRange(waitSlotCount * 30, waitSlotCount * 50),
+    [waitSlotCount]
+  );
+  const currentTaskIndex = useMemo(
+    () => submissionItems.findIndex((item) => item.status === "submitting"),
+    [submissionItems]
+  );
+  const currentTask = currentTaskIndex >= 0 ? submissionItems[currentTaskIndex] : null;
+  const nextTask =
+    currentTaskIndex >= 0
+      ? submissionItems
+          .slice(currentTaskIndex + 1)
+          .find((item) => item.status === "pending" || item.status === "submitting") ?? null
+      : submissionItems.find((item) => item.status === "pending") ?? null;
 
   useEffect(() => {
     if (isRunning) return; // 提交中不重新生成
@@ -625,6 +713,13 @@ function App() {
     applyDateRangeSelection(startDate, value);
   };
 
+  const applyPresetDateRange = (days: number, offsetDays: number = 0) => {
+    const startBase = parseDateValue(todayDate) ?? new Date();
+    const start = formatDateValue(addDays(startBase, offsetDays));
+    const end = formatDateValue(addDays(parseDateValue(start) ?? startBase, days - 1));
+    applyDateRangeSelection(start, end);
+  };
+
   const applyDateRangeSelection = (nextStart: string, nextEnd: string) => {
     if (!nextStart || !nextEnd) {
       setStartDate(nextStart);
@@ -632,6 +727,7 @@ function App() {
       setDates([]);
       setRemovedSubmissionKeys([]);
       setErrorMessage(undefined);
+      setBannerMessage(null);
       return;
     }
 
@@ -646,8 +742,12 @@ function App() {
 
     if (normalizedEnd > maxAllowedEnd) {
       normalizedEnd = maxAllowedEnd;
-      setErrorMessage(`日期区间不能超过 ${MAX_DATE_RANGE_DAYS} 天，已自动调整结束日期`);
+      setBannerMessage({
+        type: "info",
+        text: `日期区间不能超过 ${MAX_DATE_RANGE_DAYS} 天，结束日期已自动调整`,
+      });
     } else {
+      setBannerMessage(null);
       setErrorMessage(undefined);
     }
 
@@ -657,6 +757,7 @@ function App() {
       setEndDate(normalizedEnd);
       setDates(expanded);
       setRemovedSubmissionKeys([]);
+      setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "日期生成失败");
     }
@@ -875,6 +976,17 @@ function App() {
         const savedAccount = saved.account || "";
         const savedReceptionIds = saved.receptionIds ?? [];
         const savedIdCards = saved.visitorIdCards ?? [];
+        const hasRestoreData = savedIdCards.length > 0 || savedReceptionIds.length > 0;
+
+        if (hasRestoreData) {
+          setRestoreProgress({
+            active: true,
+            visitorDone: 0,
+            visitorTotal: savedIdCards.length,
+            receptionDone: 0,
+            receptionTotal: savedReceptionIds.length,
+          });
+        }
 
         if (savedAccount && !startupLoginPhoneRef.current) {
           setAccount(savedAccount);
@@ -903,6 +1015,7 @@ function App() {
                     idx === i ? { ...v, loading: false, info, error: undefined } : v
                   )
                 );
+                setRestoreProgress((prev) => ({ ...prev, visitorDone: i + 1 }));
               }
             } catch (error) {
               if (!disposed) {
@@ -912,6 +1025,7 @@ function App() {
                     idx === i ? { ...v, loading: false, info: undefined, error: msg } : v
                   )
                 );
+                setRestoreProgress((prev) => ({ ...prev, visitorDone: i + 1 }));
               }
             }
           }
@@ -939,6 +1053,7 @@ function App() {
                     idx === i ? { ...r, loading: false, info, error: undefined } : r
                   )
                 );
+                setRestoreProgress((prev) => ({ ...prev, receptionDone: i + 1 }));
               }
             } catch (error) {
               if (!disposed) {
@@ -948,9 +1063,18 @@ function App() {
                     idx === i ? { ...r, loading: false, info: undefined, error: msg } : r
                   )
                 );
+                setRestoreProgress((prev) => ({ ...prev, receptionDone: i + 1 }));
               }
             }
           }
+        }
+
+        if (!disposed && hasRestoreData) {
+          setRestoreProgress((prev) => ({ ...prev, active: false }));
+          setBannerMessage({
+            type: "success",
+            text: `已恢复上次会话：访客 ${savedIdCards.length} 条，接待人 ${savedReceptionIds.length} 条`,
+          });
         }
       })
       .catch((error) => {
@@ -958,6 +1082,7 @@ function App() {
           setErrorMessage(
             `加载表单状态失败: ${error instanceof Error ? error.message : String(error)}`
           );
+          setRestoreProgress((prev) => ({ ...prev, active: false }));
         }
       })
       .finally(() => {
@@ -1002,7 +1127,7 @@ function App() {
 
             const wrap = tableWrapRef.current;
             if (wrap) {
-              const row = wrap.querySelector(`tr[data-index="${currentIndex}"]`);
+              const row = wrap.querySelector(`tr[data-submission-key="${currentKey}"]`);
               if (row) {
                 row.scrollIntoView({ behavior: "smooth", block: "center" });
               }
@@ -1112,6 +1237,14 @@ function App() {
     }, 5000);
     return () => window.clearTimeout(timer);
   }, [errorMessage]);
+
+  useEffect(() => {
+    if (!bannerMessage) return;
+    const timer = window.setTimeout(() => {
+      setBannerMessage(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [bannerMessage]);
 
   const isRunningRef = useRef(isRunning);
   useEffect(() => {
@@ -1283,6 +1416,78 @@ function App() {
     setCountdownSeconds(null);
   };
 
+  const removeExistingSubmissionItems = () => {
+    if (isRunning) return;
+    const existingKeys = submissionItems
+      .filter((item) => item.existing)
+      .map((item) => buildExistingSubmissionKey(item.date, item.receptionId));
+
+    if (existingKeys.length === 0) {
+      setBannerMessage({ type: "info", text: "当前没有可批量移除的已存在任务" });
+      return;
+    }
+
+    setRemovedSubmissionKeys((prev) => Array.from(new Set([...prev, ...existingKeys])));
+    setBannerMessage({ type: "success", text: `已移除 ${existingKeys.length} 条已存在任务` });
+  };
+
+  const restoreAllSubmissionItems = () => {
+    if (isRunning) return;
+    if (removedSubmissionKeys.length === 0) {
+      setBannerMessage({ type: "info", text: "当前没有隐藏任务" });
+      return;
+    }
+    setRemovedSubmissionKeys([]);
+    setShowOnlyActionableTasks(false);
+    setBannerMessage({ type: "success", text: "已恢复全部任务" });
+  };
+
+  const copyFailedSubmissionItems = async () => {
+    const failedItems = submissionItems.filter((item) => item.status === "failed");
+    if (failedItems.length === 0) {
+      setBannerMessage({ type: "info", text: "当前没有失败任务可复制" });
+      return;
+    }
+    try {
+      await copyText(serializeTaskItems(failedItems));
+      setBannerMessage({ type: "success", text: `已复制 ${failedItems.length} 条失败任务` });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const keepOnlyFailedSubmissionItems = () => {
+    const failedItems = submissionItems.filter((item) => item.status === "failed");
+    if (failedItems.length === 0) {
+      setBannerMessage({ type: "info", text: "当前没有失败任务可保留" });
+      return;
+    }
+
+    const failedKeySet = new Set(
+      failedItems.map((item) => buildExistingSubmissionKey(item.date, item.receptionId))
+    );
+    const allKeys = buildSubmissionItems(
+      dates,
+      confirmedReceptions,
+      existingSubmissionKeySet,
+      new Set<string>()
+    ).map((item) => buildExistingSubmissionKey(item.date, item.receptionId));
+
+    setRemovedSubmissionKeys(allKeys.filter((key) => !failedKeySet.has(key)));
+    setSubmissionItems(
+      failedItems.map((item) => ({
+        ...item,
+        status: "pending" as const,
+        existing: false,
+      }))
+    );
+    setProcessedCount(0);
+    setCountdownSeconds(null);
+    setCompletionModalOpen(false);
+    setShowOnlyActionableTasks(false);
+    setBannerMessage({ type: "success", text: `已保留 ${failedItems.length} 条失败任务，可直接重试` });
+  };
+
   useEffect(() => {
     if (isRunning) return;
     if (!allVisitorsReady || !allReceptionsReady) {
@@ -1408,12 +1613,22 @@ function App() {
     setRemovedSubmissionKeys([]);
     setExistingSubmissionKeys([]);
     setSubmissionItems([]);
+    setShowOnlyActionableTasks(false);
     setProcessedCount(0);
     setCountdownSeconds(null);
     setErrorMessage(undefined);
+    setBannerMessage(null);
     setLogs([]);
     setStatusRecords([]);
     setLogActionFeedback(null);
+    setBatchImportProgress(null);
+    setRestoreProgress({
+      active: false,
+      visitorDone: 0,
+      visitorTotal: 0,
+      receptionDone: 0,
+      receptionTotal: 0,
+    });
 
     // 重置登录状态
     setLoginStatus("idle");
@@ -1448,7 +1663,7 @@ function App() {
     const existingIds = new Set(visitors.map((v) => v.idCard.trim()).filter((id) => id.length > 0));
     const newIds = lines.filter((id) => !existingIds.has(id));
     if (newIds.length === 0) {
-      setErrorMessage("所有身份证号已存在于列表中");
+      setBannerMessage({ type: "info", text: "所有身份证号已存在于列表中" });
       setBatchVisitorModalOpen(false);
       setBatchVisitorText("");
       return;
@@ -1461,6 +1676,17 @@ function App() {
     setVisitors(allRows);
     setBatchVisitorModalOpen(false);
     setBatchVisitorText("");
+    let successCount = 0;
+    let failedCount = 0;
+    const duplicateCount = lines.length - newIds.length;
+    setBatchImportProgress({
+      target: "visitor",
+      done: 0,
+      total: newIds.length,
+      success: 0,
+      failed: 0,
+      duplicates: duplicateCount,
+    });
 
     // 逐个查询
     const startIdx = kept.length;
@@ -1473,6 +1699,12 @@ function App() {
             j === idx ? { ...v, loading: false, error: "请先填写申请人手机号" } : v
           )
         );
+        setBatchImportProgress((prev) =>
+          prev && prev.target === "visitor"
+            ? { ...prev, done: i + 1, failed: prev.failed + 1 }
+            : prev
+        );
+        failedCount += 1;
         continue;
       }
       try {
@@ -1485,6 +1717,12 @@ function App() {
             j === idx ? { ...v, loading: false, info, error: undefined } : v
           )
         );
+        setBatchImportProgress((prev) =>
+          prev && prev.target === "visitor"
+            ? { ...prev, done: i + 1, success: prev.success + 1 }
+            : prev
+        );
+        successCount += 1;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         setVisitors((prev) =>
@@ -1492,8 +1730,19 @@ function App() {
             j === idx ? { ...v, loading: false, info: undefined, error: msg } : v
           )
         );
+        setBatchImportProgress((prev) =>
+          prev && prev.target === "visitor"
+            ? { ...prev, done: i + 1, failed: prev.failed + 1 }
+            : prev
+        );
+        failedCount += 1;
       }
     }
+
+    setBannerMessage({
+      type: "success",
+      text: `批量导入访客完成：成功 ${successCount} 条，失败 ${failedCount} 条，重复 ${duplicateCount} 条`,
+    });
   };
 
   const confirmBatchReceptions = async () => {
@@ -1506,7 +1755,7 @@ function App() {
     const existingIds = new Set(receptions.map((r) => r.employeeId.trim()).filter((id) => id.length > 0));
     const newIds = lines.filter((id) => !existingIds.has(id));
     if (newIds.length === 0) {
-      setErrorMessage("所有员工号已存在于列表中");
+      setBannerMessage({ type: "info", text: "所有员工号已存在于列表中" });
       setBatchReceptionModalOpen(false);
       setBatchReceptionText("");
       return;
@@ -1518,6 +1767,17 @@ function App() {
     setReceptions(allRows);
     setBatchReceptionModalOpen(false);
     setBatchReceptionText("");
+    let successCount = 0;
+    let failedCount = 0;
+    const duplicateCount = lines.length - newIds.length;
+    setBatchImportProgress({
+      target: "reception",
+      done: 0,
+      total: newIds.length,
+      success: 0,
+      failed: 0,
+      duplicates: duplicateCount,
+    });
 
     const startIdx = kept.length;
     for (let i = 0; i < newIds.length; i++) {
@@ -1530,6 +1790,12 @@ function App() {
             j === idx ? { ...r, loading: false, info, error: undefined } : r
           )
         );
+        setBatchImportProgress((prev) =>
+          prev && prev.target === "reception"
+            ? { ...prev, done: i + 1, success: prev.success + 1 }
+            : prev
+        );
+        successCount += 1;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         setReceptions((prev) =>
@@ -1537,8 +1803,19 @@ function App() {
             j === idx ? { ...r, loading: false, info: undefined, error: msg } : r
           )
         );
+        setBatchImportProgress((prev) =>
+          prev && prev.target === "reception"
+            ? { ...prev, done: i + 1, failed: prev.failed + 1 }
+            : prev
+        );
+        failedCount += 1;
       }
     }
+
+    setBannerMessage({
+      type: "success",
+      text: `批量导入接待人完成：成功 ${successCount} 条，失败 ${failedCount} 条，重复 ${duplicateCount} 条`,
+    });
   };
 
   const clearLogs = async () => {
@@ -1583,13 +1860,25 @@ function App() {
           <button type="button" className="error-banner-close" onClick={() => setErrorMessage(undefined)}>&times;</button>
         </div>
       ) : null}
+      {bannerMessage ? (
+        <div className={`message-banner message-banner-${bannerMessage.type}`}>
+          <span>{bannerMessage.text}</span>
+          <button type="button" className="message-banner-close" onClick={() => setBannerMessage(null)}>&times;</button>
+        </div>
+      ) : null}
+      {restoreProgress.active ? (
+        <div className="restore-banner">
+          正在恢复上次会话：访客 {restoreProgress.visitorDone}/{restoreProgress.visitorTotal}，
+          接待人 {restoreProgress.receptionDone}/{restoreProgress.receptionTotal}
+        </div>
+      ) : null}
       <div className="layout">
       <section className="panel panel-left">
 
         <div className="block">
-          <h2>1. 申请人信息</h2>
+          <h2>1. 申请人与记录查询</h2>
           <label>
-            手机号
+            申请人手机号
             <div className="account-row">
               <input
                 type="text"
@@ -1614,23 +1903,23 @@ function App() {
                 }
               >
                 {loginStatus === "logging-in"
-                  ? "登录中..."
+                  ? "记录登录中..."
                   : loginStatus === "logged-in"
-                    ? "切换"
-                    : "登录"}
+                    ? "切换申请账号"
+                    : "记录查询登录"}
               </button>
             </div>
           </label>
           {loginStatus === "logged-in" && loginObtainedAt ? (
             <p className="login-info">
               <span className="login-status-dot login-dot-success" />
-              登录时间: {formatHistoryTime(loginObtainedAt)}
+              预约记录登录时间: {formatHistoryTime(loginObtainedAt)}
             </p>
           ) : null}
           {loginStatus === "failed" && loginError ? (
             <p className="field-error">{loginError}</p>
           ) : null}
-          <p className="hint">填写申请单无需登录，如需查询预约状态则必须登录。</p>
+          <p className="hint">提交申请只使用手机号作为申请人信息，登录仅用于“查询记录”，不会影响提交流程。</p>
         </div>
 
         <div className="block">
@@ -1720,6 +2009,11 @@ function App() {
               批量添加
             </button>
           </div>
+          {batchImportProgress?.target === "visitor" ? (
+            <p className="hint">
+              批量导入进度：{batchImportProgress.done}/{batchImportProgress.total}，成功 {batchImportProgress.success}，失败 {batchImportProgress.failed}，重复 {batchImportProgress.duplicates}
+            </p>
+          ) : null}
         </div>
 
         <div className="block">
@@ -1795,6 +2089,11 @@ function App() {
               批量添加
             </button>
           </div>
+          {batchImportProgress?.target === "reception" ? (
+            <p className="hint">
+              批量导入进度：{batchImportProgress.done}/{batchImportProgress.total}，成功 {batchImportProgress.success}，失败 {batchImportProgress.failed}，重复 {batchImportProgress.duplicates}
+            </p>
+          ) : null}
         </div>
 
         <div className="block">
@@ -1814,6 +2113,23 @@ function App() {
               disabled={isRunning}
               onChange={handleEndDateChange}
             />
+          </div>
+          <div className="date-shortcuts">
+            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(1)}>
+              今天
+            </button>
+            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(1, 1)}>
+              明天
+            </button>
+            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(3)}>
+              未来 3 天
+            </button>
+            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(5)}>
+              未来 5 天
+            </button>
+            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(10)}>
+              未来 10 天
+            </button>
           </div>
         </div>
 
@@ -1839,15 +2155,59 @@ function App() {
             日期范围 {dates.length} 天 | 接待人 {confirmedReceptions.length || 0} 人 | 待执行{" "}
             <strong>{submissionItems.length}</strong> 条任务
           </p>
+          {submissionItems.length > 0 ? (
+            <div className="preflight-summary">
+              <span>实际提交 {requestPreviewCount} 条</span>
+              <span>本地跳过 {skippedPreviewCount} 条</span>
+              <span>预计等待 {estimatedWaitText}</span>
+            </div>
+          ) : null}
+          {submissionItems.length > 0 ? (
+            <div className="submission-tools">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isRunning}
+                onClick={() => setShowOnlyActionableTasks((prev) => !prev)}
+              >
+                {showOnlyActionableTasks ? "显示全部任务" : "仅看待提交"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isRunning || skippedPreviewCount === 0}
+                onClick={removeExistingSubmissionItems}
+              >
+                删除已存在任务
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isRunning || removedSubmissionKeys.length === 0}
+                onClick={restoreAllSubmissionItems}
+              >
+                恢复全部任务
+              </button>
+            </div>
+          ) : null}
+          {isRunning && currentTask ? (
+            <div className="current-task-card">
+              <p><strong>当前任务：</strong>{currentTask.date} / {currentTask.receptionName} / {currentTask.receptionDept}</p>
+              <p><strong>下一条：</strong>{nextTask ? `${nextTask.date} / ${nextTask.receptionName}` : "无"}</p>
+              <p><strong>剩余：</strong>{Math.max(submissionItems.length - processedCount, 0)} 条</p>
+            </div>
+          ) : null}
         </div>
 
         {/* 中部申请列表 */}
         <div className="submission-table-wrap" ref={tableWrapRef}>
-          {submissionItems.length === 0 ? (
+          {actionableSubmissionItems.length === 0 ? (
             <p className="empty">
-              {dates.length === 0 || confirmedReceptions.length === 0
-                ? "请先选择日期并确认接待人"
-                : "当前没有待执行任务，请保留至少一条任务"}
+              {submissionItems.length === 0
+                ? dates.length === 0 || confirmedReceptions.length === 0
+                  ? "请先选择日期并确认接待人"
+                  : "当前没有待执行任务，请保留至少一条任务"
+                : "当前筛选结果为空"}
             </p>
           ) : (
             <table className="submission-table">
@@ -1863,8 +2223,12 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {submissionItems.map((item, idx) => (
-                  <tr key={`${item.date}-${item.receptionName}-${idx}`} data-index={idx} className={`submission-row-${item.status}`}>
+                {actionableSubmissionItems.map((item, idx) => (
+                  <tr
+                    key={`${item.date}-${item.receptionName}-${idx}`}
+                    data-submission-key={buildExistingSubmissionKey(item.date, item.receptionId)}
+                    className={`submission-row-${item.status}`}
+                  >
                     <td>{idx + 1}</td>
                     <td>{item.date}</td>
                     <td>{item.weekday}</td>
@@ -1971,12 +2335,30 @@ function App() {
                 {skippedCount > 0 && <span className="stat-item stat-skipped">已跳过 {skippedCount}</span>}
                 {failedCount > 0 && <span className="stat-item stat-failed">失败 {failedCount}</span>}
               </div>
+              {failedCount > 0 ? (
+                <div className="completion-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary completion-btn"
+                    onClick={copyFailedSubmissionItems}
+                  >
+                    复制失败项
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-start completion-btn"
+                    onClick={keepOnlyFailedSubmissionItems}
+                  >
+                    仅保留失败项重试
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="btn-primary completion-btn"
                 onClick={() => setCompletionModalOpen(false)}
               >
-                确定
+                关闭
               </button>
             </div>
           </div>
