@@ -12,6 +12,7 @@ type VisitorInfo = {
   phone: string;
   photo: unknown;
   idPhoto: unknown;
+  socialProof: unknown;
 };
 
 type ReceptionInfo = {
@@ -2115,9 +2116,6 @@ function App() {
             />
           </div>
           <div className="date-shortcuts">
-            <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(1)}>
-              今天
-            </button>
             <button type="button" className="btn-secondary" disabled={isRunning} onClick={() => applyPresetDateRange(1, 1)}>
               明天
             </button>

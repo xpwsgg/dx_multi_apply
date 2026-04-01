@@ -20,6 +20,7 @@ pub struct VisitorInfo {
     pub phone: String,
     pub photo: Value,
     pub id_photo: Value,
+    pub social_proof: Value,
 }
 
 fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
@@ -141,9 +142,13 @@ fn extract_visitor_from_response(id_card: &str, body: &Value) -> Result<VisitorI
     let phone = find_row_field_str(row, "textField_lxv44orz")?;
     let photo_raw = find_row_field_value(row, "imageField_ly9i5k5q")?;
     let id_photo_raw = find_row_field_value(row, "attachmentField_lxv44osj")?;
+    let social_proof_raw = find_row_field_value(row, "attachmentField_lxv44osk")
+        .unwrap_or_else(|_| Value::Array(vec![]));
 
     let photo = parse_json_string_array(&photo_raw)?;
     let id_photo = parse_json_string_array(&id_photo_raw)?;
+    let social_proof = parse_json_string_array(&social_proof_raw)
+        .unwrap_or_else(|_| Value::Array(vec![]));
 
     if name.is_empty() {
         return Err(format!("visitor name is empty for id_card {id_card}"));
@@ -155,6 +160,7 @@ fn extract_visitor_from_response(id_card: &str, body: &Value) -> Result<VisitorI
         phone,
         photo,
         id_photo,
+        social_proof,
     })
 }
 

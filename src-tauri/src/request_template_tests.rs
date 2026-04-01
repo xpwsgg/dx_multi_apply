@@ -17,6 +17,7 @@ fn build_test_visitor() -> crate::visitor_client::VisitorInfo {
         phone: "17849759601".to_string(),
         photo: serde_json::json!([]),
         id_photo: serde_json::json!([]),
+        social_proof: serde_json::json!([]),
     }
 }
 

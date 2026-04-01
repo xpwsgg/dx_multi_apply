@@ -92,7 +92,7 @@ fn build_visitor_row(visitor: &VisitorInfo) -> Value {
             "componentName": "AttachmentField",
             "fieldId": "attachmentField_lxv44osk",
             "label": "社保/在职证明",
-            "fieldData": { "value": [] }
+            "fieldData": { "value": visitor.social_proof }
         },
         {
             "componentName": "AttachmentField",
