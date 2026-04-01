@@ -1,7 +1,7 @@
 {
   "name": "usersxiaodocumentscodevisit-batch-submitter",
   "private": true,
-  "version": "2.5.12",
+  "version": "2.5.13",
   "type": "module",
   "scripts": {
     "dev": "vite",
