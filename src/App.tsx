@@ -2471,9 +2471,6 @@ function App() {
                       <th>单号</th>
                       <th>访客姓名</th>
                       <th>访客电话</th>
-                      <th>到访公司</th>
-                      <th>到访园区</th>
-                      <th>申请类型</th>
                       <th>接待人</th>
                       <th>接待人联系方式</th>
                       <th>权限生效时间</th>
@@ -2488,9 +2485,6 @@ function App() {
                         <td>{r.flowNum}</td>
                         <td>{r.visitorName}</td>
                         <td>{r.visitorPhone}</td>
-                        <td>{r.visitCompany}</td>
-                        <td>{r.visitPark}</td>
-                        <td>{r.applyType}</td>
                         <td>{r.rPersonName}</td>
                         <td>{r.rPersonPhone}</td>
                         <td>{r.dateStart}</td>
