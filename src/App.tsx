@@ -714,7 +714,7 @@ function App() {
     applyDateRangeSelection(startDate, value);
   };
 
-  const applyPresetDateRange = (days: number, offsetDays: number = 0) => {
+  const applyPresetDateRange = (days: number, offsetDays: number = 1) => {
     const startBase = parseDateValue(todayDate) ?? new Date();
     const start = formatDateValue(addDays(startBase, offsetDays));
     const end = formatDateValue(addDays(parseDateValue(start) ?? startBase, days - 1));
