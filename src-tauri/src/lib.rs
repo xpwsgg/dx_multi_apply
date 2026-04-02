@@ -45,6 +45,25 @@ fn serialize_visitor_ids(visitor_id_cards: Vec<String>) -> String {
     ids.join(",")
 }
 
+fn has_pending_tasks_after_current(
+    tasks: &[SubmissionTask],
+    current_index: usize,
+    force_resubmit: bool,
+    existing_keys_by_reception: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
+) -> bool {
+    tasks.iter().skip(current_index + 1).any(|next_task| {
+        force_resubmit || {
+            let next_key = format!("{}-{}", next_task.date, next_task.reception_id);
+            !existing_keys_by_reception
+                .get(&next_task.reception_id)
+                .is_some_and(|existing_keys| existing_keys.contains(&next_key))
+        }
+    })
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SubmissionTask {
@@ -155,6 +174,7 @@ async fn start_batch_submit(
     visitors: Vec<VisitorInfo>,
     receptions: Vec<ReceptionInfo>,
     tasks: Vec<SubmissionTask>,
+    force_resubmit: bool,
 ) -> Result<(), String> {
     if visitors.is_empty() {
         return Err("至少需要一个访客".to_string());
@@ -233,9 +253,10 @@ async fn start_batch_submit(
                 return Err("批量提交已手动停止".to_string());
             }
 
-            if existing_keys_by_reception
-                .get(&task.reception_id)
-                .is_some_and(|existing_keys| existing_keys.contains(&key))
+            if !force_resubmit
+                && existing_keys_by_reception
+                    .get(&task.reception_id)
+                    .is_some_and(|existing_keys| existing_keys.contains(&key))
             {
                 let _ = app_handle.emit(
                     "batch-log",
@@ -252,12 +273,12 @@ async fn start_batch_submit(
             let date = NaiveDate::parse_from_str(&date_text, "%Y-%m-%d")
                 .map_err(|err| format!("invalid date {date_text}: {err}"))?;
 
-            let has_pending_after_current = tasks.iter().skip(index + 1).any(|next_task| {
-                let next_key = format!("{}-{}", next_task.date, next_task.reception_id);
-                !existing_keys_by_reception
-                    .get(&next_task.reception_id)
-                    .is_some_and(|existing_keys| existing_keys.contains(&next_key))
-            });
+            let has_pending_after_current = has_pending_tasks_after_current(
+                &tasks,
+                index,
+                force_resubmit,
+                &existing_keys_by_reception,
+            );
 
             match submit_client::submit_once(&account, &visitors, reception, date).await {
                 Ok(submit_result) => {
@@ -737,4 +758,70 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod start_batch_submit_tests {
+    use super::{has_pending_tasks_after_current, SubmissionTask};
+
+    #[test]
+    fn should_not_wait_after_last_task_when_force_resubmit_is_enabled() {
+        let tasks = vec![
+            SubmissionTask {
+                date: "2026-04-01".to_string(),
+                reception_id: "R1".to_string(),
+            },
+            SubmissionTask {
+                date: "2026-04-02".to_string(),
+                reception_id: "R1".to_string(),
+            },
+        ];
+
+        let existing_keys_by_reception = std::collections::HashMap::from([(
+            "R1".to_string(),
+            std::collections::HashSet::from([
+                "2026-04-01-R1".to_string(),
+                "2026-04-02-R1".to_string(),
+            ]),
+        )]);
+
+        assert!(has_pending_tasks_after_current(
+            &tasks,
+            0,
+            true,
+            &existing_keys_by_reception,
+        ));
+        assert!(!has_pending_tasks_after_current(
+            &tasks,
+            1,
+            true,
+            &existing_keys_by_reception,
+        ));
+    }
+
+    #[test]
+    fn should_skip_wait_when_remaining_tasks_are_all_existing_and_not_force_resubmit() {
+        let tasks = vec![
+            SubmissionTask {
+                date: "2026-04-01".to_string(),
+                reception_id: "R1".to_string(),
+            },
+            SubmissionTask {
+                date: "2026-04-02".to_string(),
+                reception_id: "R1".to_string(),
+            },
+        ];
+
+        let existing_keys_by_reception = std::collections::HashMap::from([(
+            "R1".to_string(),
+            std::collections::HashSet::from(["2026-04-02-R1".to_string()]),
+        )]);
+
+        assert!(!has_pending_tasks_after_current(
+            &tasks,
+            0,
+            false,
+            &existing_keys_by_reception,
+        ));
+    }
 }

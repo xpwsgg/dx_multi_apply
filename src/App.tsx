@@ -1526,6 +1526,19 @@ function App() {
     try {
       setErrorMessage(undefined);
       await syncExistingSubmissionKeys(dates);
+
+      // 检测是否有已提交的任务，提示用户是否强制重新提交
+      const existingItems = submissionItems.filter((item) => item.existing);
+      let forceResubmit = false;
+      if (existingItems.length > 0) {
+        const confirmed = await confirm(
+          `当前有 ${existingItems.length} 条已提交的任务，是否强制重新提交？`,
+          { title: "确认重新提交", kind: "warning" }
+        );
+        if (!confirmed) return;
+        forceResubmit = true;
+      }
+
       setLogs([]);
       setProcessedCount(0);
       setCountdownSeconds(null);
@@ -1555,6 +1568,7 @@ function App() {
         visitors: confirmedVisitors,
         receptions: confirmedReceptions,
         tasks,
+        forceResubmit,
       });
       setCompletionModalOpen(true);
     } catch (error) {

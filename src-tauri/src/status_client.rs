@@ -1,3 +1,4 @@
+use chrono::{FixedOffset, TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -22,8 +23,8 @@ pub struct VisitorStatusRecord {
 
 fn timestamp_to_date(ts_str: &str) -> String {
     if let Ok(ms) = ts_str.parse::<i64>() {
-        let secs = ms / 1000;
-        if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
+        let timezone = FixedOffset::east_opt(8 * 3600).expect("valid timezone offset");
+        if let chrono::LocalResult::Single(dt) = timezone.timestamp_millis_opt(ms) {
             return dt.format("%Y-%m-%d").to_string();
         }
     }
@@ -172,4 +173,20 @@ pub async fn query_visitor_status(
         .collect();
 
     Ok((records, text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::timestamp_to_date;
+
+    #[test]
+    fn should_convert_status_timestamp_using_utc_plus_8() {
+        assert_eq!(timestamp_to_date("1775145600000"), "2026-04-03");
+        assert_eq!(timestamp_to_date("1775059200000"), "2026-04-02");
+    }
+
+    #[test]
+    fn should_keep_original_text_when_timestamp_is_invalid() {
+        assert_eq!(timestamp_to_date("not-a-timestamp"), "not-a-timestamp");
+    }
 }
