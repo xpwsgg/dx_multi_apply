@@ -77,16 +77,31 @@ body {
   color: var(--text);
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title-main {
+  display: inline-flex;
+  align-items: center;
   gap: 10px;
 }
 
-.title::before {
+.title-main::before {
   content: "";
   display: inline-block;
   width: 4px;
   height: 20px;
   background: var(--brand);
   border-radius: 2px;
+}
+
+.title-version {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .layout {

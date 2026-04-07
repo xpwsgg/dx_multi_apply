@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -567,6 +568,7 @@ function App() {
   const [batchVisitorText, setBatchVisitorText] = useState("");
   const [batchReceptionModalOpen, setBatchReceptionModalOpen] = useState(false);
   const [batchReceptionText, setBatchReceptionText] = useState("");
+  const [appVersion, setAppVersion] = useState("");
 
   const startupLoginPhoneRef = useRef<string>("");
   const todayDate = useMemo(() => getLocalTodayDate(), []);
@@ -1254,6 +1256,24 @@ function App() {
 
   useEffect(() => {
     let disposed = false;
+
+    getVersion()
+      .then((version) => {
+        if (!disposed) {
+          setAppVersion(version);
+        }
+      })
+      .catch((error) => {
+        console.warn("读取软件版本失败", error);
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
     let unlistenClose: (() => void) | undefined;
 
     getCurrentWindow()
@@ -1860,7 +1880,10 @@ function App() {
 
   return (
     <main className="page">
-      <h1 className="title">批量入场申请</h1>
+      <h1 className="title">
+        <span className="title-main">批量入场申请</span>
+        {appVersion ? <span className="title-version">v{appVersion}</span> : null}
+      </h1>
       {factoryInfo ? (
         <div className="factory-banner">
           <span className="factory-company">{factoryInfo.company}</span>
