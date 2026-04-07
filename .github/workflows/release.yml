@@ -45,9 +45,9 @@ jobs:
           workspaces: src-tauri
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        shell: bash
+        run: |
+          npm install --global pnpm@9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
