@@ -71,6 +71,63 @@ jobs:
           prerelease: false
           args: --target ${{ matrix.target }}
 
+      - name: Rename macOS release assets to tag version
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.ref_name }}"
+          display_version="${release_tag#v}"
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+          original_dmg="$(find "$bundle_dir" -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          if [ -z "$original_dmg" ]; then
+            echo "No dmg bundle found in $bundle_dir" >&2
+            exit 1
+          fi
+
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) renamed_dmg="BatchApply_${display_version}_aarch64.dmg" ;;
+            x86_64-apple-darwin) renamed_dmg="BatchApply_${display_version}_x64.dmg" ;;
+            *) echo "Unsupported macOS target: ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+
+          original_name="$(basename "$original_dmg")"
+          cp "$original_dmg" "$renamed_dmg"
+          gh release delete-asset "$release_tag" "$original_name" --yes || true
+          gh release upload "$release_tag" "$renamed_dmg" --clobber
+
+      - name: Rename Windows installer assets to tag version
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $releaseTag = "${{ github.ref_name }}"
+          $displayVersion = $releaseTag -replace '^v', ''
+          $bundleRoot = "src-tauri/target/${{ matrix.target }}/release/bundle"
+
+          $msi = Get-ChildItem "$bundleRoot/msi/*.msi" -File | Select-Object -First 1
+          if (-not $msi) {
+            Write-Error "MSI bundle not found under $bundleRoot/msi"
+          }
+
+          $setupExe = Get-ChildItem "$bundleRoot/nsis/*-setup.exe" -File | Select-Object -First 1
+          if (-not $setupExe) {
+            Write-Error "NSIS setup exe not found under $bundleRoot/nsis"
+          }
+
+          $renamedMsi = "BatchApply_${displayVersion}_x64_zh-CN.msi"
+          $renamedSetupExe = "BatchApply_${displayVersion}_x64-setup.exe"
+
+          Copy-Item $msi.FullName $renamedMsi
+          Copy-Item $setupExe.FullName $renamedSetupExe
+
+          gh release delete-asset $releaseTag $msi.Name --yes
+          gh release delete-asset $releaseTag $setupExe.Name --yes
+          gh release upload $releaseTag $renamedMsi $renamedSetupExe --clobber
+
       - name: Upload portable exe (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
