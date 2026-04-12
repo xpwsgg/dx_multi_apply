@@ -106,7 +106,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 6fr 4fr;
   gap: 16px;
   flex: 1;
   min-height: 0;

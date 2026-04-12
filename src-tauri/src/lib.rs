@@ -74,11 +74,21 @@ struct SubmissionTask {
 #[tauri::command]
 async fn fetch_visitor_info(
     app_handle: tauri::AppHandle,
+    visitor_phone: Option<String>,
     account: String,
     id_card: String,
 ) -> Result<VisitorInfo, String> {
+    let phone = match visitor_phone.as_deref() {
+        Some(p) if !p.trim().is_empty() => p.to_string(),
+        _ => account.trim().to_string(),
+    };
+
+    if phone.is_empty() {
+        return Err("请提供访客手机号或申请人手机号".to_string());
+    }
+
     let timestamp = Utc::now().to_rfc3339();
-    match visitor_client::fetch_visitor_info(&account, &id_card).await {
+    match visitor_client::fetch_visitor_info(&phone, &id_card).await {
         Ok((info, response_text)) => {
             let log_payload = json!({
                 "result": "visitor_query",
@@ -91,8 +101,7 @@ async fn fetch_visitor_info(
                 &json!({
                     "timestamp": timestamp,
                     "operation": "fetch_visitor_info",
-                    "request_summary": format!("account={account}, id_card={id_card}"),
-                    "status": 200,
+                    "request_summary": format!("phone={phone}, id_card={id_card}"),
                     "response_body": response_text
                 }),
             );
@@ -109,7 +118,7 @@ async fn fetch_visitor_info(
                 &json!({
                     "timestamp": timestamp,
                     "operation": "fetch_visitor_info",
-                    "request_summary": format!("account={account}, id_card={id_card}"),
+                    "request_summary": format!("phone={phone}, id_card={id_card}"),
                     "status": 0,
                     "response_body": err
                 }),
@@ -190,6 +199,7 @@ async fn start_batch_submit(
         let form_state = form_state_store::FormState {
             account: account.clone(),
             visitor_id_cards: visitors.iter().map(|v| v.id_card.clone()).collect(),
+            visitor_phones: visitors.iter().map(|v| v.phone.clone()).collect(),
             reception_ids: receptions.iter().map(|r| r.employee_id.clone()).collect(),
         };
         let _ = form_state_store::save_form_state(&app_handle, &form_state);
@@ -426,11 +436,13 @@ fn save_form_state(
     app_handle: tauri::AppHandle,
     account: String,
     visitor_id_cards: Vec<String>,
+    visitor_phones: Option<Vec<String>>,
     reception_ids: Vec<String>,
 ) -> Result<(), String> {
     let state = form_state_store::FormState {
         account,
         visitor_id_cards,
+        visitor_phones: visitor_phones.unwrap_or_default(),
         reception_ids,
     };
     form_state_store::save_form_state(&app_handle, &state)
@@ -668,13 +680,19 @@ async fn check_token(app_handle: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 async fn query_visitor_status(
     app_handle: tauri::AppHandle,
+    visitor_phone: Option<String>,
     id_card: String,
 ) -> Result<Vec<VisitorStatusRecord>, String> {
     let token_data = token_store::load_token(&app_handle)?
         .ok_or_else(|| "未登录，请先登录获取 token".to_string())?;
 
+    let phone = match visitor_phone.as_deref() {
+        Some(p) if !p.trim().is_empty() => p.to_string(),
+        _ => token_data.phone.clone(),
+    };
+
     let timestamp = Utc::now().to_rfc3339();
-    match status_client::query_visitor_status(&token_data.phone, &id_card, &token_data.ac_token)
+    match status_client::query_visitor_status(&phone, &id_card, &token_data.ac_token)
         .await
     {
         Ok((records, response_text)) => {

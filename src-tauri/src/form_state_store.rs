@@ -10,6 +10,8 @@ const FORM_STATE_FILE_NAME: &str = "form_state.json";
 pub struct FormState {
     pub account: String,
     pub visitor_id_cards: Vec<String>,
+    #[serde(default)]
+    pub visitor_phones: Vec<String>,
     pub reception_ids: Vec<String>,
 }
 

@@ -32,6 +32,7 @@ type ReceptionRow = {
 
 type VisitorRow = {
   idCard: string;
+  phone: string;
   loading: boolean;
   info?: VisitorInfo;
   error?: string;
@@ -58,6 +59,7 @@ type BatchLogPayload = {
 type FormState = {
   account: string;
   visitorIdCards: string[];
+  visitorPhones: string[];
   receptionIds: string[];
 };
 
@@ -524,7 +526,7 @@ function serializeTaskItems(items: SubmissionItem[]): string {
 function App() {
   const [account, setAccount] = useState("");
   const [visitors, setVisitors] = useState<VisitorRow[]>([
-    { idCard: "", loading: false },
+    { idCard: "", phone: "", loading: false },
   ]);
   const [receptions, setReceptions] = useState<ReceptionRow[]>([
     { employeeId: "", loading: false },
@@ -921,7 +923,7 @@ function App() {
     }
   };
 
-  const queryStatus = async (idCard: string) => {
+  const queryStatus = async (idCard: string, visitorPhone?: string) => {
     if (!idCard.trim()) {
       setErrorMessage("请先填写身份证号");
       return;
@@ -932,9 +934,10 @@ function App() {
     }
     setStatusLoading(true);
     try {
+      const phone = visitorPhone?.trim() || null;
       const records = await invoke<VisitorStatusRecord[]>(
         "query_visitor_status",
-        { idCard: idCard.trim() }
+        { visitorPhone: phone, idCard: idCard.trim() }
       );
       setStatusRecords(records);
       setStatusModalOpen(true);
@@ -957,12 +960,16 @@ function App() {
       const visitorIdCards = visitors
         .map((v) => v.idCard.trim())
         .filter((id) => id.length > 0);
+      const visitorPhones = visitors
+        .map((v) => v.phone.trim())
+        .filter((p) => p.length > 0);
       const receptionIds = receptions
         .map((r) => r.employeeId.trim())
         .filter((id) => id.length > 0);
       invoke("save_form_state", {
         account: account.trim(),
         visitorIdCards,
+        visitorPhones,
         receptionIds,
       }).catch(() => {});
     }, 500);
@@ -979,6 +986,7 @@ function App() {
         const savedAccount = saved.account || "";
         const savedReceptionIds = saved.receptionIds ?? [];
         const savedIdCards = saved.visitorIdCards ?? [];
+        const savedPhones = saved.visitorPhones ?? [];
         const hasRestoreData = savedIdCards.length > 0 || savedReceptionIds.length > 0;
 
         if (hasRestoreData) {
@@ -997,8 +1005,9 @@ function App() {
 
         // Auto-query visitors
         if (savedAccount && savedIdCards.length > 0) {
-          const rows: VisitorRow[] = savedIdCards.map((idCard) => ({
+          const rows: VisitorRow[] = savedIdCards.map((idCard, i) => ({
             idCard,
+            phone: savedPhones[i] || "",
             loading: true,
           }));
           setVisitors(rows);
@@ -1006,9 +1015,11 @@ function App() {
           for (let i = 0; i < savedIdCards.length; i++) {
             if (disposed) return;
             const idCard = savedIdCards[i].trim();
+            const visitorPhone = savedPhones[i]?.trim() || null;
             if (!idCard) continue;
             try {
               const info = await invoke<VisitorInfo>("fetch_visitor_info", {
+                visitorPhone,
                 account: savedAccount.trim(),
                 idCard,
               });
@@ -1320,8 +1331,12 @@ function App() {
 
   const queryVisitor = async (index: number) => {
     const row = visitors[index];
-    if (!row || !row.idCard.trim() || !account.trim()) {
-      setErrorMessage("请先填写申请人手机号和访客身份证号");
+    if (!row || !row.idCard.trim()) {
+      setErrorMessage("请先填写访客身份证号");
+      return;
+    }
+    if (!account.trim() && !row.phone.trim()) {
+      setErrorMessage("请先填写申请人手机号或访客手机号");
       return;
     }
 
@@ -1332,7 +1347,9 @@ function App() {
     );
 
     try {
+      const visitorPhone = row.phone.trim() || null;
       const info = await invoke<VisitorInfo>("fetch_visitor_info", {
+        visitorPhone,
         account: account.trim(),
         idCard: row.idCard.trim(),
       });
@@ -1354,7 +1371,7 @@ function App() {
   };
 
   const addVisitor = () => {
-    setVisitors((prev) => [...prev, { idCard: "", loading: false }]);
+    setVisitors((prev) => [...prev, { idCard: "", phone: "", loading: false }]);
   };
 
   const removeVisitor = (index: number) => {
@@ -1366,6 +1383,14 @@ function App() {
     setVisitors((prev) =>
       prev.map((v, i) =>
         i === index ? { ...v, idCard: value, info: undefined, error: undefined } : v
+      )
+    );
+  };
+
+  const updateVisitorPhone = (index: number, value: string) => {
+    setVisitors((prev) =>
+      prev.map((v, i) =>
+        i === index ? { ...v, phone: value, info: undefined, error: undefined } : v
       )
     );
   };
@@ -1640,7 +1665,7 @@ function App() {
 
     // 清空表单字段
     setAccount("");
-    setVisitors([{ idCard: "", loading: false }]);
+    setVisitors([{ idCard: "", phone: "", loading: false }]);
     setReceptions([{ employeeId: "", loading: false }]);
     setStartDate("");
     setEndDate("");
@@ -1681,6 +1706,7 @@ function App() {
       await invoke("save_form_state", {
         account: "",
         visitorIdCards: [],
+        visitorPhones: [],
         receptionIds: [],
       });
     } catch {
@@ -1695,9 +1721,17 @@ function App() {
       .filter((s) => s.length > 0);
     if (lines.length === 0) return;
 
+    // 解析每行：支持 "身份证号 手机号" 格式，手机号可选
+    const parsed = lines.map((line) => {
+      const parts = line.split(/\s+/);
+      const idCard = parts[0] || "";
+      const phone = parts[1] || "";
+      return { idCard, phone };
+    });
+
     const existingIds = new Set(visitors.map((v) => v.idCard.trim()).filter((id) => id.length > 0));
-    const newIds = lines.filter((id) => !existingIds.has(id));
-    if (newIds.length === 0) {
+    const newItems = parsed.filter((p) => p.idCard && !existingIds.has(p.idCard));
+    if (newItems.length === 0) {
       setBannerMessage({ type: "info", text: "所有身份证号已存在于列表中" });
       setBatchVisitorModalOpen(false);
       setBatchVisitorText("");
@@ -1706,18 +1740,18 @@ function App() {
 
     // 移除空行，追加新行
     const kept = visitors.filter((v) => v.idCard.trim().length > 0);
-    const newRows: VisitorRow[] = newIds.map((idCard) => ({ idCard, loading: true }));
+    const newRows: VisitorRow[] = newItems.map(({ idCard, phone }) => ({ idCard, phone, loading: true }));
     const allRows = [...kept, ...newRows];
     setVisitors(allRows);
     setBatchVisitorModalOpen(false);
     setBatchVisitorText("");
     let successCount = 0;
     let failedCount = 0;
-    const duplicateCount = lines.length - newIds.length;
+    const duplicateCount = lines.length - newItems.length;
     setBatchImportProgress({
       target: "visitor",
       done: 0,
-      total: newIds.length,
+      total: newItems.length,
       success: 0,
       failed: 0,
       duplicates: duplicateCount,
@@ -1725,13 +1759,13 @@ function App() {
 
     // 逐个查询
     const startIdx = kept.length;
-    for (let i = 0; i < newIds.length; i++) {
+    for (let i = 0; i < newItems.length; i++) {
       const idx = startIdx + i;
-      const idCard = newIds[i];
-      if (!account.trim()) {
+      const { idCard, phone } = newItems[i];
+      if (!account.trim() && !phone.trim()) {
         setVisitors((prev) =>
           prev.map((v, j) =>
-            j === idx ? { ...v, loading: false, error: "请先填写申请人手机号" } : v
+            j === idx ? { ...v, loading: false, error: "请先填写申请人手机号或访客手机号" } : v
           )
         );
         setBatchImportProgress((prev) =>
@@ -1743,7 +1777,9 @@ function App() {
         continue;
       }
       try {
+        const visitorPhone = phone.trim() || null;
         const info = await invoke<VisitorInfo>("fetch_visitor_info", {
+          visitorPhone,
           account: account.trim(),
           idCard,
         });
@@ -1914,7 +1950,7 @@ function App() {
       <section className="panel panel-left">
 
         <div className="block">
-          <h2>1. 申请人与记录查询</h2>
+          <h2>1. 申请人</h2>
           <label>
             申请人手机号
             <div className="account-row">
@@ -1975,18 +2011,26 @@ function App() {
                       updateVisitorIdCard(index, e.currentTarget.value)
                     }
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !isRunning && !visitor.loading && visitor.idCard.trim() && account.trim()) {
+                      if (e.key === "Enter" && !isRunning && !visitor.loading && visitor.idCard.trim()) {
                         queryVisitor(index);
                       }
                     }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="手机号(选填)"
+                    value={visitor.phone}
+                    disabled={isRunning || visitor.loading}
+                    onChange={(e) =>
+                      updateVisitorPhone(index, e.currentTarget.value)
+                    }
                   />
                   <button
                     type="button"
                     disabled={
                       isRunning ||
                       visitor.loading ||
-                      !visitor.idCard.trim() ||
-                      !account.trim()
+                      !visitor.idCard.trim()
                     }
                     onClick={() => queryVisitor(index)}
                   >
@@ -2000,7 +2044,7 @@ function App() {
                       loginStatus !== "logged-in" ||
                       statusLoading
                     }
-                    onClick={() => queryStatus(visitor.idCard)}
+                    onClick={() => queryStatus(visitor.idCard, visitor.phone)}
                   >
                     {statusLoading ? "查询中..." : "查询记录"}
                   </button>
@@ -2553,11 +2597,11 @@ function App() {
               </button>
             </div>
             <div className="batch-modal-body">
-              <p className="batch-hint">请输入身份证号，每行一个：</p>
+              <p className="batch-hint">请输入身份证号和手机号，每行一个，手机号选填（空格分隔）：</p>
               <textarea
                 className="batch-textarea"
                 rows={8}
-                placeholder={"310101199001011234\n320102199002022345\n330103199003033456"}
+                placeholder={"310101199001011234 13800138000\n320102199002022345\n330103199003033456 15912345678"}
                 value={batchVisitorText}
                 onChange={(e) => setBatchVisitorText(e.currentTarget.value)}
                 autoFocus

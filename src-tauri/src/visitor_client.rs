@@ -23,7 +23,7 @@ pub struct VisitorInfo {
     pub social_proof: Value,
 }
 
-fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
+fn build_fetch_data(visitor_phone: &str, id_card: &str) -> Result<Value, String> {
     let mut data: Value = serde_json::from_str(FETCH_DATA_TEMPLATE).map_err(|e| e.to_string())?;
     let fields = data
         .as_array_mut()
@@ -37,7 +37,7 @@ fn build_fetch_data(account: &str, id_card: &str) -> Result<Value, String> {
             .to_string();
 
         if field_id == "textField_ly2ugh3m" {
-            field["fieldData"]["value"] = Value::String(account.to_string());
+            field["fieldData"]["value"] = Value::String(visitor_phone.to_string());
         }
 
         if field_id == "tableField_lxv44os5" {
@@ -165,14 +165,14 @@ fn extract_visitor_from_response(id_card: &str, body: &Value) -> Result<VisitorI
 }
 
 pub async fn fetch_visitor_info(
-    account: &str,
+    visitor_phone: &str,
     id_card: &str,
 ) -> Result<(VisitorInfo, String), String> {
-    let data = build_fetch_data(account, id_card)?;
+    let data = build_fetch_data(visitor_phone, id_card)?;
     let data_str = serde_json::to_string(&data).map_err(|e| e.to_string())?;
     let binding_str = BINDING_FORMULAS.to_string();
     let stamp = Utc::now().timestamp_millis().to_string();
-    let referer = build_referer(account);
+    let referer = build_referer(visitor_phone);
 
     let form_params = [
         ("_csrf_token", CSRF_TOKEN.to_string()),
