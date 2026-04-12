@@ -957,12 +957,9 @@ function App() {
       return;
     }
     const timer = window.setTimeout(() => {
-      const visitorIdCards = visitors
-        .map((v) => v.idCard.trim())
-        .filter((id) => id.length > 0);
-      const visitorPhones = visitors
-        .map((v) => v.phone.trim())
-        .filter((p) => p.length > 0);
+      const validVisitors = visitors.filter((v) => v.idCard.trim().length > 0);
+      const visitorIdCards = validVisitors.map((v) => v.idCard.trim());
+      const visitorPhones = validVisitors.map((v) => v.phone.trim());
       const receptionIds = receptions
         .map((r) => r.employeeId.trim())
         .filter((id) => id.length > 0);
