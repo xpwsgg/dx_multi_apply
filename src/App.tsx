@@ -923,7 +923,7 @@ function App() {
     }
   };
 
-  const queryStatus = async (idCard: string, visitorPhone?: string) => {
+  const queryStatus = async (idCard: string) => {
     if (!idCard.trim()) {
       setErrorMessage("请先填写身份证号");
       return;
@@ -934,10 +934,9 @@ function App() {
     }
     setStatusLoading(true);
     try {
-      const phone = visitorPhone?.trim() || null;
       const records = await invoke<VisitorStatusRecord[]>(
         "query_visitor_status",
-        { visitorPhone: phone, idCard: idCard.trim() }
+        { idCard: idCard.trim() }
       );
       setStatusRecords(records);
       setStatusModalOpen(true);
@@ -2041,7 +2040,7 @@ function App() {
                       loginStatus !== "logged-in" ||
                       statusLoading
                     }
-                    onClick={() => queryStatus(visitor.idCard, visitor.phone)}
+                    onClick={() => queryStatus(visitor.idCard)}
                   >
                     {statusLoading ? "查询中..." : "查询记录"}
                   </button>

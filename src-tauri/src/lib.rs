@@ -680,16 +680,12 @@ async fn check_token(app_handle: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 async fn query_visitor_status(
     app_handle: tauri::AppHandle,
-    visitor_phone: Option<String>,
     id_card: String,
 ) -> Result<Vec<VisitorStatusRecord>, String> {
     let token_data = token_store::load_token(&app_handle)?
         .ok_or_else(|| "未登录，请先登录获取 token".to_string())?;
 
-    let phone = match visitor_phone.as_deref() {
-        Some(p) if !p.trim().is_empty() => p.to_string(),
-        _ => token_data.phone.clone(),
-    };
+    let phone = token_data.phone.clone();
 
     let timestamp = Utc::now().to_rfc3339();
     match status_client::query_visitor_status(&phone, &id_card, &token_data.ac_token)
