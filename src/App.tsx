@@ -1994,7 +1994,7 @@ function App() {
         </div>
 
         <div className="block">
-          <h2>2. 访客管理</h2>
+          <h2>2. 访客管理 <span className="warn-hint">首次申请的访客必须使用官方系统添加个人信息</span></h2>
           <div className="visitor-list">
             {visitors.map((visitor, index) => (
               <div key={index} className="visitor-row">

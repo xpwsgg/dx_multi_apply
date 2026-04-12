@@ -725,6 +725,13 @@ button:disabled {
   font-size: 13px;
 }
 
+.warn-hint {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--error);
+  margin-left: 8px;
+}
+
 .error {
   margin: 12px 0 0;
   padding: 8px 10px;
