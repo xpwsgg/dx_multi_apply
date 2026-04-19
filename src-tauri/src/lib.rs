@@ -19,7 +19,7 @@ use chrono::{NaiveDate, Utc};
 use rand::Rng;
 use serde::Deserialize;
 use serde_json::json;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use reception_client::ReceptionInfo;
 use serde::Serialize;
@@ -744,6 +744,13 @@ fn clear_token(app_handle: tauri::AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(app_state::AppState::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
