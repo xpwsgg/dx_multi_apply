@@ -6,10 +6,15 @@ use crate::reception_client::ReceptionInfo;
 use crate::visitor_client::VisitorInfo;
 
 const VALUE_TEMPLATE: &str = include_str!("request_template.json");
-const SPECIAL_VISIT_AREA_RECEPTION_ID: &str = "52091191";
+
+/// 「到访区域」需要改成「进入制造现场」的接待人工号白名单。
+///
+/// 不在名单里的接待人沿用模板默认值「生产区域外围（不进入制造现场）」。
+/// 名单里的工号大小写敏感、与平台返回的 `employeeId` 逐字符一致。
+const SPECIAL_VISIT_AREA_RECEPTION_IDS: &[&str] = &["52091191", "J6517999"];
 
 fn apply_visit_area_override(field: &mut Value, reception: &ReceptionInfo) {
-    if reception.employee_id != SPECIAL_VISIT_AREA_RECEPTION_ID {
+    if !SPECIAL_VISIT_AREA_RECEPTION_IDS.contains(&reception.employee_id.as_str()) {
         return;
     }
 

@@ -39,11 +39,11 @@ fn find_field<'a>(payload: &'a serde_json::Value, label: &str) -> &'a serde_json
         .unwrap()
 }
 
-#[test]
-fn should_override_visit_area_for_special_reception() {
+/// 断言「到访区域」被改写成了「进入制造现场」（含 options 整体替换）。
+fn assert_visit_area_overridden(employee_id: &str) {
     let date = chrono::NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
     let visitor = build_test_visitor();
-    let reception = build_test_reception("52091191");
+    let reception = build_test_reception(employee_id);
     let payload =
         crate::request_template::build_payload(date, "17849759601", &[visitor], &reception)
             .unwrap();
@@ -53,26 +53,40 @@ fn should_override_visit_area_for_special_reception() {
         visit_area
             .pointer("/fieldData/value")
             .and_then(serde_json::Value::as_str),
-        Some("进入制造现场")
+        Some("进入制造现场"),
+        "工号 {employee_id} 的到访区域 value 未被改写"
     );
     assert_eq!(
         visit_area
             .pointer("/fieldData/text")
             .and_then(serde_json::Value::as_str),
-        Some("进入车间/管制区域")
+        Some("进入车间/管制区域"),
+        "工号 {employee_id} 的到访区域 text 未被改写"
     );
     assert_eq!(
         visit_area
             .pointer("/options/0/value")
             .and_then(serde_json::Value::as_str),
-        Some("进入制造现场")
+        Some("进入制造现场"),
+        "工号 {employee_id} 的 options value 未被改写"
     );
     assert_eq!(
         visit_area
             .pointer("/options/0/text")
             .and_then(serde_json::Value::as_str),
-        Some("进入车间/管制区域")
+        Some("进入车间/管制区域"),
+        "工号 {employee_id} 的 options text 未被改写"
     );
+}
+
+#[test]
+fn should_override_visit_area_for_special_reception() {
+    assert_visit_area_overridden("52091191");
+}
+
+#[test]
+fn should_override_visit_area_for_second_special_reception() {
+    assert_visit_area_overridden("J6517999");
 }
 
 #[test]
