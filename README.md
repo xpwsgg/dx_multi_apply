@@ -132,6 +132,10 @@ pnpm tauri build
 - **强制重提**：待执行列表包含已存在任务时弹窗确认，确认后强制重新提交
 - **等待策略**：串行执行，请求间随机等待 30–50 秒；后续全为跳过项时自动省略等待
 - **日期限制**：开始日期不早于当天；快捷日期从明天起算；区间最长 10 天，超出自动截断
+- **到访区域**（3.5.4 起）：**所有接待人**一律提交为「进入制造现场」/「进入车间/管制区域」。
+  早期按工号白名单（`52091191` / `J6517999`）改写，现翻转为**空的例外名单**
+  `DEFAULT_VISIT_AREA_RECEPTION_IDS`（`src-tauri/src/request_template.rs`）——要给某个接待人
+  恢复「生产区域外围（不进入制造现场）」时，往名单里加工号即可，不必重新引入分支逻辑。
 - **失败恢复**：部分失败不丢失上下文，可直接保留失败项重试
 
 ## 项目文档
@@ -141,6 +145,12 @@ pnpm tauri build
 
 ## 发布流程
 
+⚠️ **本项目与 ESI小助手（`/Users/xiao/Documents/code/c4cworkspace`）的批量申请模块同源**：
+后者的 `src-tauri/src/visit/` 由本项目整体平移而来。2026-08-21 起两边**同步演进**——
+业务规则改动（到访区域、去重规则、等待策略、接待公司名等）需**两个仓库一起改、一起发版**，
+否则用户手上两个应用行为会分叉。两边的 `request_template.rs` 除 `crate::` / `super::`
+导入前缀外应保持逐字一致，改完用 `diff` 复核。版本号是独立的两条线，互不对齐。
+
 1. 同步更新三处版本号：`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`
 2. 提交代码并创建 `vX.Y.Z` 格式的 tag
 3. 推送到 GitHub，Actions 自动构建并创建 Release
@@ -149,6 +159,8 @@ pnpm tauri build
 ```bash
 gh workflow run release.yml --ref vX.Y.Z
 ```
+
+本机临时构建（Intel Mac 只能出 x64 dmg）的产物归档在 `release/`，见 `release/README.md`。
 
 ## License
 
