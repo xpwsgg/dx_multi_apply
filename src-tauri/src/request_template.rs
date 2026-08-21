@@ -7,14 +7,21 @@ use crate::visitor_client::VisitorInfo;
 
 const VALUE_TEMPLATE: &str = include_str!("request_template.json");
 
-/// 「到访区域」需要改成「进入制造现场」的接待人工号白名单。
+/// 「到访区域」保留模板默认值「生产区域外围（不进入制造现场）」的接待人工号例外名单。
 ///
-/// 不在名单里的接待人沿用模板默认值「生产区域外围（不进入制造现场）」。
+/// **当前为空 —— 所有接待人一律改写为「进入制造现场」。**
+/// 保留这份名单是为了后期能按接待人回退：某个接待人要改回外围区域时，
+/// 把工号加进来即可，不必重新引入分支逻辑。
 /// 名单里的工号大小写敏感、与平台返回的 `employeeId` 逐字符一致。
-const SPECIAL_VISIT_AREA_RECEPTION_IDS: &[&str] = &["52091191", "J6517999"];
+const DEFAULT_VISIT_AREA_RECEPTION_IDS: &[&str] = &[];
+
+/// 该接待人是否保留模板默认的「到访区域」。
+pub(crate) fn keeps_default_visit_area(employee_id: &str) -> bool {
+    DEFAULT_VISIT_AREA_RECEPTION_IDS.contains(&employee_id)
+}
 
 fn apply_visit_area_override(field: &mut Value, reception: &ReceptionInfo) {
-    if !SPECIAL_VISIT_AREA_RECEPTION_IDS.contains(&reception.employee_id.as_str()) {
+    if keeps_default_visit_area(&reception.employee_id) {
         return;
     }
 

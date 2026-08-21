@@ -80,35 +80,19 @@ fn assert_visit_area_overridden(employee_id: &str) {
 }
 
 #[test]
-fn should_override_visit_area_for_special_reception() {
+fn should_override_visit_area_for_every_reception() {
+    // 原白名单里的两个工号（回归保护）+ 任意普通工号，一律改写为「进入制造现场」。
     assert_visit_area_overridden("52091191");
-}
-
-#[test]
-fn should_override_visit_area_for_second_special_reception() {
     assert_visit_area_overridden("J6517999");
+    assert_visit_area_overridden("12345678");
 }
 
 #[test]
-fn should_keep_default_visit_area_for_other_receptions() {
-    let date = chrono::NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
-    let visitor = build_test_visitor();
-    let reception = build_test_reception("12345678");
-    let payload =
-        crate::request_template::build_payload(date, "17849759601", &[visitor], &reception)
-            .unwrap();
-
-    let visit_area = find_field(&payload, "到访区域");
-    assert_eq!(
-        visit_area
-            .pointer("/fieldData/value")
-            .and_then(serde_json::Value::as_str),
-        Some("生产区域外围（不进入制造现场）")
-    );
-    assert_eq!(
-        visit_area
-            .pointer("/fieldData/text")
-            .and_then(serde_json::Value::as_str),
-        Some("外围公共区域")
-    );
+fn default_visit_area_exception_list_is_currently_empty() {
+    // 例外名单当前为空。后期给某个接待人恢复「生产区域外围」时，
+    // 往 DEFAULT_VISIT_AREA_RECEPTION_IDS 加工号会让本测试失败，
+    // 提醒同步补一条「该工号保持模板默认值」的断言。
+    assert!(!crate::request_template::keeps_default_visit_area("52091191"));
+    assert!(!crate::request_template::keeps_default_visit_area("J6517999"));
+    assert!(!crate::request_template::keeps_default_visit_area("12345678"));
 }
