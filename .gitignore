@@ -37,3 +37,7 @@ openspec
 
 # Test artifacts
 coverage/
+
+# 分发成品归档区：二进制不入库，只保留目录说明（见 release/README.md）
+release/*
+!release/README.md
