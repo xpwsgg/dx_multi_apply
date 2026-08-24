@@ -4913,7 +4913,7 @@ dependencies = [
 
 [[package]]
 name = "usersxiaodocumentscodevisit-batch-submitter"
-version = "3.5.4"
+version = "3.5.5"
 dependencies = [
  "chrono",
  "rand 0.8.5",
