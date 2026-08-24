@@ -87,8 +87,48 @@ fn assert_visit_area_overridden(employee_id: &str) {
     );
 }
 
+/// 断言「到访区域」保持模板默认值「生产区域外围（不进入制造现场）」（options 也不被替换）。
+fn assert_visit_area_kept_default(employee_id: &str) {
+    let date = chrono::NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
+    let visitor = build_test_visitor();
+    let reception = build_test_reception(employee_id);
+    let payload =
+        crate::request_template::build_payload(date, "17849759601", &[visitor], &reception)
+            .unwrap();
+
+    let visit_area = find_field(&payload, "到访区域");
+    assert_eq!(
+        visit_area
+            .pointer("/fieldData/value")
+            .and_then(serde_json::Value::as_str),
+        Some("生产区域外围（不进入制造现场）"),
+        "工号 {employee_id} 的到访区域 value 不应被改写"
+    );
+    assert_eq!(
+        visit_area
+            .pointer("/fieldData/text")
+            .and_then(serde_json::Value::as_str),
+        Some("外围公共区域"),
+        "工号 {employee_id} 的到访区域 text 不应被改写"
+    );
+    assert_eq!(
+        visit_area
+            .pointer("/options/0/value")
+            .and_then(serde_json::Value::as_str),
+        Some("生产区域外围（不进入制造现场）"),
+        "工号 {employee_id} 的 options value 不应被替换"
+    );
+    assert_eq!(
+        visit_area
+            .pointer("/options/0/text")
+            .and_then(serde_json::Value::as_str),
+        Some("外围公共区域"),
+        "工号 {employee_id} 的 options text 不应被替换"
+    );
+}
+
 #[test]
-fn should_override_visit_area_for_every_reception() {
+fn should_override_visit_area_for_non_exception_receptions() {
     // 原白名单里的两个工号（回归保护）+ 任意普通工号，一律改写为「进入制造现场」。
     assert_visit_area_overridden("52091191");
     assert_visit_area_overridden("J6517999");
@@ -96,10 +136,16 @@ fn should_override_visit_area_for_every_reception() {
 }
 
 #[test]
-fn default_visit_area_exception_list_is_currently_empty() {
-    // 例外名单当前为空。后期给某个接待人恢复「生产区域外围」时，
-    // 往 DEFAULT_VISIT_AREA_RECEPTION_IDS 加工号会让本测试失败，
-    // 提醒同步补一条「该工号保持模板默认值」的断言。
+fn should_keep_default_visit_area_for_exception_reception() {
+    // 52090907 由用户指定放回「外围公共区域」，走 DEFAULT_VISIT_AREA_RECEPTION_IDS 例外分支。
+    assert_visit_area_kept_default("52090907");
+}
+
+#[test]
+fn default_visit_area_exception_list_contains_only_known_ids() {
+    // 锁定例外名单的当前内容：增删工号会让本测试失败，
+    // 提醒同步补/删对应的「保持默认值 / 被改写」断言。
+    assert!(crate::request_template::keeps_default_visit_area("52090907"));
     assert!(!crate::request_template::keeps_default_visit_area("52091191"));
     assert!(!crate::request_template::keeps_default_visit_area("J6517999"));
     assert!(!crate::request_template::keeps_default_visit_area("12345678"));
