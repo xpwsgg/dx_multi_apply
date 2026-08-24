@@ -34,7 +34,8 @@ fn apply_visit_area_override(field: &mut Value, reception: &ReceptionInfo) {
         "text": "进入车间/管制区域",
         "__sid__": "serial_m56iixsp",
         "value": "进入制造现场",
-        "sid": "serial_khe7yak4"
+        "sid": "serial_khe7yak4",
+        "status": "active"
     }]);
 }
 

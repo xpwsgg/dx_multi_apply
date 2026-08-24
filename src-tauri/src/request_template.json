@@ -50,7 +50,7 @@
     "fieldId": "textField_m2lk8mr2",
     "label": "供应商code",
     "fieldData": {
-      "value": "VCN00507"
+      "value": ""
     }
   },
   {
@@ -158,17 +158,8 @@
     "fieldId": "textareaField_lxn9o9eg",
     "label": "服务/事由描述",
     "fieldData": {
-      "value": "镭射机维护保养"
+      "value": "镭射设备维护保养"
     }
-  },
-  {
-    "componentName": "SelectField",
-    "fieldId": "selectField_lxn9o9em",
-    "label": "所属公司",
-    "fieldData": {
-      "value": "VCN00507(镭富电子设备(上海)有限公司)"
-    },
-    "options": []
   },
   {
     "componentName": "TextField",

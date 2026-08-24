@@ -3,7 +3,8 @@ pub(crate) const COOKIE: &str = "isg=BGpqwESq96zc_ntA73hqkgqyu9YM2-41v5mXHfQhLL1
 pub(crate) const CSRF_TOKEN: &str = "c5683320-e1de-4fc0-b89d-65b268eaacd1";
 pub(crate) const FORM_UUID: &str = "FORM-2768FF7B2C0D4A0AB692FD28DBA09FD57IHQ";
 pub(crate) const APP_TYPE: &str = "APP_GRVPTEOQ6D4B7FLZFYNJ";
-pub(crate) const SCHEMA_VERSION: &str = "669";
+// 模板已对齐平台当前的 25 字段结构，故同步报 743（旧值 669 实测也能提交成功）。
+pub(crate) const SCHEMA_VERSION: &str = "743";
 pub(crate) const ACCEPT: &str = "application/json, text/json";
 pub(crate) const ACCEPT_LANGUAGE: &str = "zh-CN,zh;q=0.9,ja-JP;q=0.8,ja;q=0.7";
 pub(crate) const BX_V: &str = "2.5.11";

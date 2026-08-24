@@ -77,6 +77,14 @@ fn assert_visit_area_overridden(employee_id: &str) {
         Some("进入车间/管制区域"),
         "工号 {employee_id} 的 options text 未被改写"
     );
+    // status 是 2026-08-23 抓包比对后补齐的，平台实际提交带这个键
+    assert_eq!(
+        visit_area
+            .pointer("/options/0/status")
+            .and_then(serde_json::Value::as_str),
+        Some("active"),
+        "工号 {employee_id} 的 options status 未被改写"
+    );
 }
 
 #[test]
